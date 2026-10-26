@@ -1,0 +1,16 @@
+key_trigger {
+  input: KEY_ESC
+  action: "back"
+}
+key_trigger {
+  input: KEY_P
+  action: "back"
+}
+key_trigger {
+  input: KEY_Z
+  action: "undo"
+}
+mouse_trigger {
+  input: MOUSE_BUTTON_1
+  action: "touch"
+}

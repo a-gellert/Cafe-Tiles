@@ -1,0 +1,249 @@
+images {
+  image: "/main/assets/images/food_burger.png"
+}
+images {
+  image: "/main/assets/images/food_coffee.png"
+}
+images {
+  image: "/main/assets/images/food_donut.png"
+}
+images {
+  image: "/main/assets/images/food_pizza.png"
+}
+images {
+  image: "/main/assets/images/food_cupcake.png"
+}
+images {
+  image: "/main/assets/images/food_fries.png"
+}
+images {
+  image: "/main/assets/images/food_icecream.png"
+}
+images {
+  image: "/main/assets/images/food_hotdog.png"
+}
+images {
+  image: "/main/assets/images/food_croissant.png"
+}
+images {
+  image: "/main/assets/images/food_cookie.png"
+}
+images {
+  image: "/main/assets/images/food_juice.png"
+}
+images {
+  image: "/main/assets/images/food_cake.png"
+}
+images {
+  image: "/main/assets/images/food_taco.png"
+}
+images {
+  image: "/main/assets/images/food_sushi.png"
+}
+images {
+  image: "/main/assets/images/food_egg.png"
+}
+images {
+  image: "/main/assets/images/food_cheese.png"
+}
+images {
+  image: "/main/assets/images/tile.png"
+}
+images {
+  image: "/main/assets/images/tile_glow.png"
+}
+images {
+  image: "/main/assets/images/cust_cat.png"
+}
+images {
+  image: "/main/assets/images/cust_bear.png"
+}
+images {
+  image: "/main/assets/images/cust_bunny.png"
+}
+images {
+  image: "/main/assets/images/cust_panda.png"
+}
+images {
+  image: "/main/assets/images/cust_fox.png"
+}
+images {
+  image: "/main/assets/images/cust_frog.png"
+}
+images {
+  image: "/main/assets/images/cust_pig.png"
+}
+images {
+  image: "/main/assets/images/cust_penguin.png"
+}
+images {
+  image: "/main/assets/images/panel.png"
+}
+images {
+  image: "/main/assets/images/frame.png"
+}
+images {
+  image: "/main/assets/images/btn.png"
+}
+images {
+  image: "/main/assets/images/btn_round.png"
+}
+images {
+  image: "/main/assets/images/cell.png"
+}
+images {
+  image: "/main/assets/images/bubble_tail.png"
+}
+images {
+  image: "/main/assets/images/square.png"
+}
+images {
+  image: "/main/assets/images/bar.png"
+}
+images {
+  image: "/main/assets/images/shadow.png"
+}
+images {
+  image: "/main/assets/images/icon_pause.png"
+}
+images {
+  image: "/main/assets/images/icon_play.png"
+}
+images {
+  image: "/main/assets/images/icon_home.png"
+}
+images {
+  image: "/main/assets/images/icon_undo.png"
+}
+images {
+  image: "/main/assets/images/icon_shuffle.png"
+}
+images {
+  image: "/main/assets/images/icon_bolt.png"
+}
+images {
+  image: "/main/assets/images/icon_ad.png"
+}
+images {
+  image: "/main/assets/images/icon_sound.png"
+}
+images {
+  image: "/main/assets/images/icon_sound_off.png"
+}
+images {
+  image: "/main/assets/images/icon_music.png"
+}
+images {
+  image: "/main/assets/images/icon_music_off.png"
+}
+images {
+  image: "/main/assets/images/icon_check.png"
+}
+images {
+  image: "/main/assets/images/icon_close.png"
+}
+images {
+  image: "/main/assets/images/icon_plus.png"
+}
+images {
+  image: "/main/assets/images/icon_gear.png"
+}
+images {
+  image: "/main/assets/images/icon_gamepad.png"
+}
+images {
+  image: "/main/assets/images/icon_brush.png"
+}
+images {
+  image: "/main/assets/images/icon_globe.png"
+}
+images {
+  image: "/main/assets/images/icon_star.png"
+}
+images {
+  image: "/main/assets/images/icon_lock.png"
+}
+images {
+  image: "/main/assets/images/icon_arrow.png"
+}
+images {
+  image: "/main/assets/images/coin.png"
+}
+images {
+  image: "/main/assets/images/star.png"
+}
+images {
+  image: "/main/assets/images/heart.png"
+}
+images {
+  image: "/main/assets/images/angry.png"
+}
+images {
+  image: "/main/assets/images/bin.png"
+}
+images {
+  image: "/main/assets/images/hand.png"
+}
+images {
+  image: "/main/assets/images/spark.png"
+}
+images {
+  image: "/main/assets/images/puff.png"
+}
+images {
+  image: "/main/assets/images/rays.png"
+}
+images {
+  image: "/main/assets/images/glow.png"
+}
+images {
+  image: "/main/assets/images/pat_stripes.png"
+}
+images {
+  image: "/main/assets/images/pat_dots.png"
+}
+images {
+  image: "/main/assets/images/pat_diamond.png"
+}
+images {
+  image: "/main/assets/images/pat_checker.png"
+}
+images {
+  image: "/main/assets/images/pat_planks.png"
+}
+images {
+  image: "/main/assets/images/awning.png"
+}
+images {
+  image: "/main/assets/images/window.png"
+}
+images {
+  image: "/main/assets/images/lamp.png"
+}
+images {
+  image: "/main/assets/images/garland.png"
+}
+images {
+  image: "/main/assets/images/plant_small.png"
+}
+images {
+  image: "/main/assets/images/plant_big.png"
+}
+images {
+  image: "/main/assets/images/plant_hang.png"
+}
+images {
+  image: "/main/assets/images/coffee_machine.png"
+}
+images {
+  image: "/main/assets/images/cake_display.png"
+}
+images {
+  image: "/main/assets/images/menu_board.png"
+}
+images {
+  image: "/main/assets/images/table.png"
+}
+margin: 2
+extrude_borders: 2
+inner_padding: 0

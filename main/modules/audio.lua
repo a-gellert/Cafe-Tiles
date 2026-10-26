@@ -1,0 +1,39 @@
+-- Sound effects and music (components live on main:/sounds).
+local M = {}
+
+local URL = "main:/sounds#"
+local sound_on = true
+local music_on = true
+local music_playing = false
+local last_played = {}
+local clock = 0
+
+function M.update(dt)
+	clock = clock + dt
+end
+
+function M.play(name, gain)
+	if not sound_on then return end
+	-- the same sound twice in one frame only adds volume and clipping
+	if last_played[name] and clock - last_played[name] < 0.04 then return end
+	last_played[name] = clock
+	sound.play(URL .. name, { gain = gain or 1 })
+end
+
+local function update_music()
+	if music_on and not music_playing then
+		sound.play(URL .. "music", { gain = 0.6 })
+		music_playing = true
+	elseif not music_on and music_playing then
+		sound.stop(URL .. "music")
+		music_playing = false
+	end
+end
+
+function M.set(sound_enabled, music_enabled)
+	sound_on = sound_enabled
+	music_on = music_enabled
+	update_music()
+end
+
+return M

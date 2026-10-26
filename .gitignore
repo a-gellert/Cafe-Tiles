@@ -1,0 +1,8 @@
+/.editor_settings
+/.internal
+/build
+/bundle
+/wasm-web
+/poki.zip
+.DS_Store
+Thumbs.db

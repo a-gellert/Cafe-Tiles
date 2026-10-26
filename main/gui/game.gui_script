@@ -1,0 +1,365 @@
+-- App controller: screens, level flow, popups, Poki events and input.
+-- Game logic lives in main/modules/*, views in main/gui/*_view.lua and popups.lua.
+local ui = require "main.gui.ui"
+local game_view = require "main.gui.game_view"
+local menu_view = require "main.gui.menu_view"
+local popups = require "main.gui.popups"
+local layout = require "main.modules.layout"
+local session = require "main.modules.session"
+local progress = require "main.modules.progress"
+local poki = require "main.modules.poki"
+local audio = require "main.modules.audio"
+local i18n = require "main.modules.i18n"
+local config = require "main.modules.config"
+
+local TOUCH = hash("touch")
+local BACK = hash("back")
+local UNDO = hash("undo")
+
+local AUTO_STEP = 0.32
+
+local app = {}
+
+local function log(...)
+	if app.autoplay then print("[cafe]", ...) end
+end
+
+-- ---------------------------------------------------------------- screens
+
+function app.rebuild()
+	ui.gen = ui.gen + 1
+	ui.buttons = {}
+	app.pressed = nil
+	if app.screen_layer then gui.delete_node(app.screen_layer) end
+	if app.popup_layer then gui.delete_node(app.popup_layer) end
+	app.screen_layer = ui.pane(nil, 0, 0)
+	app.popup_layer = ui.pane(nil, 0, 0)
+	ui.layer = "screen"
+	if app.screen == "game" then
+		game_view.build(app, app.screen_layer)
+	else
+		menu_view.build(app, app.screen_layer)
+	end
+	if app.popup then
+		ui.layer = "popup"
+		popups.build(app, app.popup)
+		ui.layer = "screen"
+	end
+end
+
+local function update_size()
+	local w, h = window.get_size()
+	if w == app.win_w and h == app.win_h then return false end
+	app.win_w, app.win_h = w, h
+	app.vw, app.vh, app.orient = layout.virtual_size(w, h)
+	return true
+end
+
+function app.open_popup(kind, data)
+	if app.popup then app.close_popup() end
+	app.popup = { kind = kind, data = data }
+	ui.layer = "popup"
+	popups.build(app, app.popup)
+	ui.layer = "screen"
+end
+
+function app.close_popup()
+	if app.popup_root then gui.delete_node(app.popup_root) end
+	app.popup_root = nil
+	app.popup = nil
+	app.pressed = nil
+	ui.remove_buttons("popup")
+end
+
+local function refresh_popup()
+	if app.popup then app.open_popup(app.popup.kind, app.popup.data) end
+end
+
+function app.show_menu()
+	poki.gameplay_stop()
+	app.screen = "menu"
+	app.session = nil
+	app.popup = nil
+	app.rebuild()
+end
+
+function app.start_level(level, skip_break)
+	local function go()
+		app.session = session.new(level, { mult = progress.coin_mult() })
+		app.screen = "game"
+		app.popup = nil
+		app.rebuild()
+		game_view.intro()
+		poki.measure("level", level, "start")
+		log("level", level, "start, tiles", app.session.total)
+	end
+	if skip_break then go() else poki.commercial_break(level, go) end
+end
+
+function app.play()
+	app.start_level(progress.data.level)
+end
+
+-- ---------------------------------------------------------------- level flow
+
+function app.pause()
+	if app.screen ~= "game" or app.popup or app.session.status ~= "play" then return end
+	poki.gameplay_stop()
+	app.open_popup("pause")
+end
+
+function app.resume()
+	app.close_popup()
+end
+
+function app.restart()
+	poki.measure("level", app.session.level, "fail")
+	app.start_level(app.session.level)
+end
+
+function app.retry()
+	poki.measure("level", app.session.level, "fail")
+	app.start_level(app.session.level)
+end
+
+-- Not ui.after: a resize rebuild must not cancel the result popup.
+local function later(delay, s, status, fn)
+	timer.delay(delay, false, function()
+		if app.session == s and s.status == status and not app.popup and app.screen == "game" then fn() end
+	end)
+end
+
+function app.on_won_soon()
+	local s = app.session
+	later(1.3, s, "won", function()
+		local r = session.result(s)
+		progress.finish_level(s.level, r.stars, r.coins)
+		poki.gameplay_stop()
+		poki.measure("level", s.level, "complete")
+		audio.play("win")
+		log("level", s.level, "won", "stars", r.stars, "coins", r.coins, "waste", r.waste, "angry", r.angry, "chances", 2 - s.chances)
+		app.open_popup("win", r)
+	end)
+end
+
+function app.on_jam_soon()
+	later(0.7, app.session, "jam", function()
+		poki.gameplay_stop()
+		log("level", app.session.level, "jam", "chances left", app.session.chances)
+		app.open_popup("jam")
+	end)
+end
+
+function app.next_level()
+	app.start_level(progress.data.level)
+end
+
+local function rewarded(size, placement, on_ok)
+	poki.measure("rewarded", placement, "interact")
+	poki.rewarded(size, function(ok)
+		if ok then
+			on_ok()
+		elseif app.screen == "game" and not app.popup then
+			game_view.toast(i18n.get("NO_AD"))
+		end
+	end)
+end
+
+function app.second_chance()
+	rewarded("medium", "second-chance", function()
+		app.close_popup()
+		session.second_chance(app.session)
+		game_view.process()
+	end)
+end
+
+function app.double_coins()
+	local r = app.popup and app.popup.data
+	if not r or r.doubled then return end
+	rewarded("medium", "double-coins", function()
+		r.doubled = true
+		progress.add_coins(r.coins)
+		progress.save()
+		audio.play("coin")
+		refresh_popup()
+	end)
+end
+
+function app.use_booster(kind)
+	local s = app.session
+	if not s or app.popup then return end
+	local can = (kind == "undo" and session.can_undo(s)) or (kind == "shuffle" and session.can_shuffle(s))
+		or (kind == "rush" and session.can_rush(s))
+	if not can then
+		audio.play("blocked")
+		ui.shake(game_view.booster_node(kind), 10)
+		return
+	end
+	local function apply()
+		session[kind](s)
+		audio.play("booster")
+		game_view.process()
+		game_view.refresh_boosters()
+		poki.gameplay_start()
+	end
+	local count = progress.data.boosters[kind] or 0
+	if count > 0 then
+		progress.data.boosters[kind] = count - 1
+		progress.save()
+		apply()
+	else
+		rewarded("small", "booster-" .. kind, apply)
+	end
+end
+
+-- ---------------------------------------------------------------- menu actions
+
+function app.buy_decor(id)
+	if progress.buy_decor(id) then
+		poki.measure("cosmetic", id, "unlock-" .. (progress.data.decor[id] or 0))
+		audio.play("serve")
+		app.rebuild()
+		ui.burst(app.popup_layer, app.vw / 2, app.vh / 2, 14, ui.GOLD, 260, 48)
+	else
+		audio.play("blocked")
+	end
+end
+
+function app.set_audio(sound_on, music_on)
+	progress.data.sound = sound_on
+	progress.data.music = music_on
+	progress.save()
+	audio.set(sound_on, music_on)
+	refresh_popup()
+end
+
+function app.next_language()
+	i18n.set(i18n.next_language())
+	progress.data.lang = i18n.get_language()
+	progress.save()
+	app.rebuild()
+end
+
+function app.more_games(url)
+	poki.measure("button", "more-games", "interact")
+	poki.open_link(url)
+end
+
+-- ---------------------------------------------------------------- autoplay (smoke tests)
+
+local function autoplay_step()
+	if poki.is_ad_active() then return end
+	if app.popup then
+		-- linger on popups so smoke-test screenshots can catch them
+		app.popup_wait = (app.popup_wait or 0) + AUTO_STEP
+		if app.popup_wait < 1.6 then return end
+		app.popup_wait = 0
+		local kind = app.popup.kind
+		if kind == "win" then
+			app.next_level()
+		elseif kind == "jam" then
+			if session.can_second_chance(app.session) then app.second_chance() else app.retry() end
+		else
+			app.close_popup()
+		end
+	elseif app.screen == "menu" then
+		app.play()
+	elseif app.session and app.session.status == "play" then
+		local id = session.suggest(app.session)
+		if id and game_view.tap_tile(id) then poki.gameplay_start() end
+	end
+end
+
+-- ---------------------------------------------------------------- lifecycle
+
+function init(self)
+	msg.post(".", "acquire_input_focus")
+	math.randomseed(os.time())
+	progress.load(sys.get_config_int("cafe.fresh", 0) == 1)
+	local start = sys.get_config_int("cafe.start_level", 0)
+	if start > 0 then progress.data.level = start end
+	if sys.get_config_int("cafe.debug_coins", 0) > 0 then progress.data.coins = sys.get_config_int("cafe.debug_coins", 0) end
+	i18n.set(progress.data.lang ~= "" and progress.data.lang or i18n.detect())
+	audio.set(progress.data.sound, progress.data.music)
+	app.autoplay = sys.get_config_int("cafe.autoplay", 0) == 1
+	app.auto_t = 0
+	app.dw = sys.get_config_int("display.width", 540)
+	app.dh = sys.get_config_int("display.height", 960)
+	update_size()
+	app.resize_t = nil
+	-- first session goes straight into the tutorial level
+	if progress.data.level <= 1 then
+		app.start_level(1, true)
+	else
+		app.show_menu()
+	end
+	-- visual QA: open a popup right away (cafe.debug_popup = win | jam | pause | decor | settings)
+	local dp = sys.get_config_string("cafe.debug_popup", "")
+	if dp ~= "" then
+		if dp ~= "decor" and dp ~= "settings" then app.start_level(progress.data.level, true) end
+		if dp == "jam" then app.session.status = "jam" end
+		app.open_popup(dp, dp == "win" and { stars = 2, coins = 128, earned = 92, bonus = 36, waste = 2, angry = 1, served = 9 } or nil)
+	end
+end
+
+function update(self, dt)
+	poki.update(dt)
+	audio.update(dt)
+	if update_size() then app.resize_t = 0.12 end
+	if app.resize_t then
+		app.resize_t = app.resize_t - dt
+		if app.resize_t <= 0 then
+			app.resize_t = nil
+			app.rebuild()
+		end
+	end
+	if poki.is_ad_active() then return end
+	if app.screen == "game" and app.session and not app.popup then
+		session.update(app.session, dt)
+		if #app.session.events > 0 then game_view.process() end
+		game_view.update(dt)
+	end
+	if app.autoplay then
+		app.auto_t = app.auto_t + dt
+		if app.auto_t >= AUTO_STEP then
+			app.auto_t = 0
+			autoplay_step()
+		end
+	end
+end
+
+local function to_virtual(action)
+	return action.x / app.dw * app.vw, action.y / app.dh * app.vh
+end
+
+function on_input(self, action_id, action)
+	if poki.is_ad_active() then return true end
+	if action_id == TOUCH then
+		local x, y = to_virtual(action)
+		local layer = app.popup and "popup" or "screen"
+		if action.pressed then
+			local b = ui.find_button(x, y, layer)
+			if b then
+				app.pressed = b
+				ui.press(b)
+			elseif app.screen == "game" and not app.popup and app.session then
+				if game_view.tap(x, y) then poki.gameplay_start() end
+			end
+		elseif action.released and app.pressed then
+			local b = app.pressed
+			app.pressed = nil
+			ui.release(b, ui.find_button(x, y, layer) == b)
+		end
+		return true
+	elseif action_id == BACK and action.pressed then
+		if app.popup and app.popup.kind == "pause" then
+			app.resume()
+		elseif app.popup and (app.popup.kind == "settings" or app.popup.kind == "decor") then
+			app.close_popup()
+		else
+			app.pause()
+		end
+	elseif action_id == UNDO and action.pressed then
+		app.use_booster("undo")
+	end
+end

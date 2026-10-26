@@ -1,2 +1,22 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Defold Protocol Buffer Text Files (https://github.com/github/linguist/issues/5091)
+*.atlas linguist-language=JSON5
+*.collection linguist-language=JSON5
+*.font linguist-language=JSON5
+*.go linguist-language=JSON5
+*.gui linguist-language=JSON5
+*.input_binding linguist-language=JSON5
+*.render linguist-language=JSON5
+*.sound linguist-language=JSON5
+
+# Defold Lua Files
+*.render_script linguist-language=Lua
+*.script linguist-language=Lua
+*.gui_script linguist-language=Lua
+
+# Binary assets
+*.png binary
+*.wav binary
+*.ttf binary
