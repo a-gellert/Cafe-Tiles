@@ -629,6 +629,30 @@ icon('globe', c => {
   c.fill(inter(circle(48, 48, 34), (x, y) => Math.abs(y - 66) - 2.5), WHITE);
 });
 icon('star', c => c.fill(star(48, 52, 44, 20, 5, -90, 3), WHITE));
+icon('chest', c => {
+  c.fill(rbox(48, 64, 36, 22, 6), WHITE);
+  c.fill(rbox(48, 36, 38, 12, 6), WHITE);
+  c.fill(rbox(48, 48, 10, 12, 3), OUTC);
+  c.fill(circle(48, 48, 3), WHITE);
+});
+icon('fire', c => {
+  const flame = union(
+    circle(48, 60, 26),
+    poly([[24, 60], [48, 14], [72, 60]], 6),
+    poly([[36, 44], [62, 20], [54, 56]], 4)
+  );
+  const cut = union(circle(48, 66, 13), poly([[36, 66], [48, 42], [60, 66]], 3));
+  c.fill(sub(flame, cut), WHITE);
+});
+icon('tasks', c => {
+  // clipboard with check lines
+  c.fill(sub(rbox(48, 52, 32, 40, 8), rbox(48, 54, 24, 32, 4)), WHITE);
+  c.fill(rbox(48, 14, 14, 8, 4), WHITE);
+  c.fill(polyline([[28, 40], [33, 45], [41, 35]], 3.5), WHITE);
+  c.fill(capsule(48, 40, 66, 40, 3.5), WHITE);
+  c.fill(polyline([[28, 62], [33, 67], [41, 57]], 3.5), WHITE);
+  c.fill(capsule(48, 62, 66, 62, 3.5), WHITE);
+});
 icon('lock', c => {
   c.fill(inter(ring(48, 40, 20, 9), above(44)), WHITE);
   c.fill(rbox(48, 64, 30, 24, 8), WHITE);
@@ -652,6 +676,37 @@ icon('arrow', c => c.fill(union(rbox(40, 48, 26, 10, 4), poly([[56, 20], [88, 48
   c.fill(star(64, 70, 53, 24, 5, -90, 4), vgrad(H('#fff07a'), H('#ffb81a'), 12, 118));
   c.fill(ellipseR(50, 46, 12, 6, -30), [1, 1, 1, 0.6]);
   c.save('star');
+}
+{ // chest
+  const c = canvas(128, 128);
+  c.fill(ellipse(64, 114, 52, 10), H('#000000', 0.25));
+  c.fill(union(rbox(64, 82, 46, 26, 8), rbox(64, 48, 50, 16, 10)), OUTC);
+  c.fill(rbox(64, 82, 42, 22, 6), vgrad(H('#a85d2a'), H('#703612'), 60, 104));
+  c.fill(rbox(64, 48, 46, 13, 8), vgrad(H('#c77436'), H('#8c4416'), 35, 61));
+  c.fill(rbox(32, 82, 6, 22, 2), H('#f5b51a'));
+  c.fill(rbox(96, 82, 6, 22, 2), H('#f5b51a'));
+  c.fill(rbox(32, 48, 6, 13, 2), H('#f5b51a'));
+  c.fill(rbox(96, 48, 6, 13, 2), H('#f5b51a'));
+  c.fill(rbox(64, 58, 46, 4, 1), H('#d9910d'));
+  c.fill(rbox(64, 60, 11, 13, 4), H('#ffe066'));
+  c.fill(circle(64, 58, 3.5), OUTC);
+  c.fill(poly([[62, 58], [66, 58], [64, 65]], 1), OUTC);
+  c.fill(ellipse(44, 42, 18, 4), [1, 1, 1, 0.4]);
+  c.save('chest');
+}
+{ // VIP crown
+  const c = canvas(112, 84);
+  const crown = union(poly([[10, 74], [14, 22], [36, 46], [56, 10], [76, 46], [98, 22], [102, 74]], 4), rbox(56, 72, 46, 10, 4));
+  c.fill(grow(crown, 4), OUTC);
+  c.fill(crown, vgrad(H('#fff07a'), H('#f5a91a'), 10, 82));
+  c.fill(rbox(56, 70, 44, 5, 2), H('#e08a12'));
+  for (const [x, y, col] of [[14, 22, '#ff5a6e'], [56, 10, '#5ec3ff'], [98, 22, '#7ed957']]) {
+    c.fill(circle(x, y, 7), OUTC);
+    c.fill(circle(x, y, 5), H(col));
+  }
+  c.fill(circle(56, 56, 7), H('#ff5a6e'));
+  c.fill(ellipseR(36, 52, 8, 3.5, -40), [1, 1, 1, 0.55]);
+  c.save('crown');
 }
 { // heart
   const c = canvas(64, 64);

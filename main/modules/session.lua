@@ -56,7 +56,12 @@ function M.new(level, opts)
 		waste = 0,
 		dishes = 0,
 		chances = config.SECOND_CHANCES,
+		paid_chances = config.PAID_CHANCES,
+		vips = 0,          -- VIP guests spawned this level
+		vip_served = 0,
+		food_done = {},    -- served triples per food (missions)
 		mult = opts.mult or 1,
+		streak = opts.streak or 0,
 		total = #positions,
 		next_customer = 1,
 	}
@@ -109,7 +114,10 @@ local function spawn(s, seat)
 	end
 	if #cand == 0 then return false end
 
+	local vip = p.level >= config.VIP_MIN_LEVEL and s.vips < (p.level >= 15 and 2 or 1)
+		and s.rng:float() < config.VIP_CHANCE
 	local k = math.min(s.rng:int(p.items_min, p.items_max), #cand)
+	if vip then k = math.min(math.max(k, 2), #cand) end
 	local items = {}
 	for _ = 1, k do
 		local total = 0
@@ -138,16 +146,19 @@ local function spawn(s, seat)
 	local patience = 0
 	if p.patience_per_item > 0 then
 		patience = 15 + p.patience_per_item * #items
+		if vip then patience = math.floor(patience * config.VIP_PATIENCE) end
 	end
+	if vip then s.vips = s.vips + 1 end
 	s.seats[seat] = {
 		id = s.next_customer,
 		kind = kind,
+		vip = vip,
 		items = items,
 		patience = patience,
 		patience_max = patience,
 	}
 	s.next_customer = s.next_customer + 1
-	push(s, { e = "arrive", seat = seat })
+	push(s, { e = "arrive", seat = seat, vip = vip })
 	return true
 end
 
@@ -156,9 +167,10 @@ local function leave(s, seat, happy)
 	local tip = 0
 	if happy then
 		local ratio = c.patience_max > 0 and math.max(0, c.patience / c.patience_max) or 1
-		tip = math.max(1, round(config.TIP_MAX * ratio * s.mult))
+		tip = math.max(1, round(config.TIP_MAX * ratio * s.mult * (c.vip and config.VIP_TIP or 1)))
 		s.coins = s.coins + tip
 		s.served = s.served + 1
+		if c.vip then s.vip_served = s.vip_served + 1 end
 	else
 		for _, it in ipairs(c.items) do
 			if not it.done then s.reserved[it.type] = s.reserved[it.type] - 1 end
@@ -167,7 +179,7 @@ local function leave(s, seat, happy)
 	end
 	s.seats[seat] = false
 	s.seat_timer[seat] = config.ARRIVE_DELAY
-	push(s, { e = "leave", seat = seat, happy = happy, coins = tip, kind = c.kind })
+	push(s, { e = "leave", seat = seat, happy = happy, coins = tip, kind = c.kind, vip = c.vip })
 end
 
 local function serve_item(s, seat, k, ids, rush)
@@ -175,9 +187,10 @@ local function serve_item(s, seat, k, ids, rush)
 	local it = c.items[k]
 	it.done = true
 	s.reserved[it.type] = s.reserved[it.type] - 1
-	local pay = round(config.DISH_PRICE * s.mult)
+	local pay = round(config.DISH_PRICE * s.mult * (c.vip and config.VIP_PAY or 1))
 	s.coins = s.coins + pay
 	s.dishes = s.dishes + 1
+	s.food_done[it.type] = (s.food_done[it.type] or 0) + 1
 	push(s, { e = "serve", ids = ids, type = it.type, seat = seat, item = k, coins = pay, rush = rush })
 	for _, other in ipairs(c.items) do
 		if not other.done then return end
@@ -415,13 +428,15 @@ function M.rush(s)
 	return true
 end
 
-function M.can_second_chance(s)
-	return s.status == "jam" and s.chances > 0 and #s.shelf < config.SHELF_COUNT
+-- paid = continue for coins (its own counter), otherwise the rewarded chance
+function M.can_second_chance(s, paid)
+	local left = paid and s.paid_chances or s.chances
+	return s.status == "jam" and left > 0 and #s.shelf < config.SHELF_COUNT
 end
 
 -- Moves up to 3 tray tiles to the holding shelf, the loneliest foods first.
-function M.second_chance(s)
-	if not M.can_second_chance(s) then return false end
+function M.second_chance(s, paid)
+	if not M.can_second_chance(s, paid) then return false end
 	local count = {}
 	for _, id in ipairs(s.slot) do
 		local t = s.board.tiles[id].type
@@ -444,7 +459,7 @@ function M.second_chance(s)
 		moved[#moved + 1] = id
 	end
 	purge_history(s, moved)
-	s.chances = s.chances - 1
+	if paid then s.paid_chances = s.paid_chances - 1 else s.chances = s.chances - 1 end
 	s.status = "play"
 	push(s, { e = "to_shelf", ids = moved })
 	push(s, { e = "shelf" })
@@ -535,15 +550,27 @@ function M.result(s)
 	elseif mistakes <= math.floor(triples * 0.3) + 1 then
 		stars = 2
 	end
-	local bonus = round((config.LEVEL_BONUS_BASE + config.LEVEL_BONUS_PER_LEVEL * s.level) * stars / 3 * s.mult)
+	local bonus = round((config.LEVEL_BONUS_BASE + config.LEVEL_BONUS_PER_LEVEL * s.level) * stars / 3 * s.mult
+		* (s.params.hard and config.HARD_BONUS or 1))
+	local new_streak = (s.streak or 0) + 1
+	local streak_pct = (new_streak >= 3 and (config.STREAK_BONUS[3] or 0.30))
+		or (new_streak == 2 and (config.STREAK_BONUS[2] or 0.15)) or 0
+	local streak_bonus = round(bonus * streak_pct)
+	local total_bonus = bonus + streak_bonus
 	return {
 		stars = stars,
-		bonus = bonus,
+		bonus = total_bonus,
+		base_bonus = bonus,
+		streak = new_streak,
+		streak_bonus = streak_bonus,
 		earned = s.coins,
-		coins = s.coins + bonus,
+		coins = s.coins + total_bonus,
 		waste = s.waste,
 		angry = s.angry,
 		served = s.served,
+		vip_served = s.vip_served,
+		food_done = s.food_done,
+		hard = s.params.hard,
 	}
 end
 

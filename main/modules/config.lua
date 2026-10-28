@@ -21,6 +21,23 @@ M.LEVEL_BONUS_BASE = 10         -- completion bonus = (base + level * per_level)
 M.LEVEL_BONUS_PER_LEVEL = 2
 M.DECOR_BONUS = 0.05            -- +5% coins per bought decor tier
 
+-- Session loops (Star Chest & Win Streak)
+M.STAR_CHEST_GOAL = 10          -- stars needed to open the chef's star chest
+M.STAR_CHEST_COINS = 80         -- coins rewarded by the star chest
+M.STREAK_BONUS = { [0] = 0, [1] = 0, [2] = 0.15, [3] = 0.30 } -- bonus coins for win streak >= 2
+
+-- Session loops 2: missions, VIP guests, hard levels, coin continue
+M.MISSION_SLOTS = 3
+M.VIP_MIN_LEVEL = 4
+M.VIP_CHANCE = 0.06             -- per arriving guest (max 1 VIP per level, 2 from level 15)
+M.VIP_PAY = 2                   -- dish price multiplier
+M.VIP_TIP = 3                   -- tip multiplier
+M.VIP_PATIENCE = 0.9
+M.HARD_BONUS = 1.5              -- level bonus multiplier on "hard" levels (every 5th)
+M.PAID_CHANCES = 2              -- "continue for coins" per level, on top of the rewarded ones
+M.CONTINUE_COST_BASE = 40       -- cost = base + per_level * level
+M.CONTINUE_COST_PER_LEVEL = 3
+
 -- Rewarded / boosters
 M.SECOND_CHANCES = 2            -- per level
 M.START_BOOSTERS = { undo = 3, shuffle = 2, rush = 1 }

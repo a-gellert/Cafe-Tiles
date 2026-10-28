@@ -57,6 +57,36 @@ function M.build(app, parent)
 	ui.text(cp, tostring(progress.data.coins), 18, 1, 32)
 	round_button(root, vw - 60, vh - 46, 78, H("#8a7a70"), "icon_gear", nil, function() app.open_popup("settings") end)
 
+	-- star chest widget
+	local cur_chest, goal_chest = progress.star_chest_progress()
+	local can_open_chest = progress.can_open_star_chest()
+	local ch_x = portrait and 175 or 390
+	local ch_y = portrait and (vh - 110) or (vh - 46)
+	local ch_w = portrait and 190 or 200
+	local chest_card = ui.slice(root, "panel", ch_x, ch_y, ch_w, 54, can_open_chest and H("#386641", 0.95) or H("#4a2a1a", 0.82), 26)
+	ui.icon(chest_card, "icon_chest", -ch_w / 2 + 32, 0, 42)
+	local ch_t = ui.text(chest_card, can_open_chest and i18n.get("OPEN") or (cur_chest .. "/" .. goal_chest), 18, 1, 26, can_open_chest and ui.WHITE or ui.GOLD)
+	ui.fit(ch_t, ch_w - 70, 26)
+	ui.button(chest_card, ch_w, 54, function()
+		if can_open_chest then
+			app.open_chest()
+		end
+	end)
+	if can_open_chest then
+		local badge = ui.box(chest_card, "btn_round", ch_w / 2 - 10, 22, 34, 34, H("#e63946"))
+		ui.text(badge, "!", 0, 2, 26)
+		ui.pulse(chest_card, 1.06, 0.5)
+	end
+
+	-- chef's tasks widget (under the chest in portrait, next to it in landscape)
+	local mx = portrait and ch_x or (ch_x + ch_w + 20)
+	local my = portrait and (ch_y - 64) or ch_y
+	local tasks = ui.slice(root, "panel", mx, my, ch_w, 54, H("#4a2a1a", 0.82), 26)
+	ui.icon(tasks, "icon_tasks", -ch_w / 2 + 32, 0, 40, ui.GOLD)
+	local mt = ui.text(tasks, i18n.get("MISSIONS"), 18, 1, 24, ui.WHITE)
+	ui.fit(mt, ch_w - 70, 24)
+	ui.button(tasks, ch_w, 54, function() app.open_popup("missions") end)
+
 	-- play
 	local py = portrait and 190 or 140
 	local pw = portrait and 360 or 400
@@ -67,6 +97,16 @@ function M.build(app, parent)
 	ui.fit(lt, pw - 60, 30)
 	ui.button(play, pw, 136, function() app.play() end)
 	ui.pulse(play, 1.04, 0.7)
+
+	-- win streak badge
+	if (progress.data.streak or 0) >= 2 then
+		local st_w = 230
+		local streak_badge = ui.slice(root, "panel", vw / 2, py + 86, st_w, 42, H("#e76f51", 0.95), 20)
+		ui.icon(streak_badge, "icon_fire", -st_w / 2 + 24, 0, 32)
+		local st_t = ui.text(streak_badge, i18n.get("WIN_STREAK") .. " x" .. progress.data.streak, 14, 1, 22, ui.WHITE)
+		ui.fit(st_t, st_w - 55, 22)
+		ui.pulse(streak_badge, 1.06, 0.6)
+	end
 
 	-- decorate + more games
 	-- round buttons flank the Play button

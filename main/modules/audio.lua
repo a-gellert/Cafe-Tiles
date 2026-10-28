@@ -12,12 +12,12 @@ function M.update(dt)
 	clock = clock + dt
 end
 
-function M.play(name, gain)
+function M.play(name, gain, speed)
 	if not sound_on then return end
 	-- the same sound twice in one frame only adds volume and clipping
 	if last_played[name] and clock - last_played[name] < 0.04 then return end
 	last_played[name] = clock
-	sound.play(URL .. name, { gain = gain or 1 })
+	sound.play(URL .. name, { gain = gain or 1, speed = speed or 1 })
 end
 
 local function update_music()

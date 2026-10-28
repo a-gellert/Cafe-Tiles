@@ -153,11 +153,16 @@ local function build_seat(i, c, appear)
 	local root = ui.pane(V.seats_pane, seat_x(i), 0)
 	local sv = { root = root, customer = c, items = {} }
 	sv.avatar = ui.box(root, "cust_" .. config.CUSTOMERS[c.kind], 0, 30, 140, 140)
+	if c.vip then
+		local crown = ui.box(sv.avatar, "crown", 0, 74, 70, 52)
+		gui.set_euler(crown, V3(0, 0, -8))
+		ui.pulse(crown, 1.08, 0.5)
+	end
 	local n = #c.items
 	local bw = 28 + n * 60
 	sv.bubble = ui.pane(root, 0, 152)
 	ui.box(sv.bubble, "bubble_tail", 0, -40, 30, 22)
-	ui.slice(sv.bubble, "frame", 0, 0, bw, 80, ui.WHITE, 30)
+	ui.slice(sv.bubble, "frame", 0, 0, bw, 80, c.vip and H("#ffe08a") or ui.WHITE, 30)
 	for k, it in ipairs(c.items) do
 		local x = (k - (n + 1) / 2) * 60
 		local icon = ui.box(sv.bubble, food_sprite(it.type), x, 6, 52, 52)
@@ -330,8 +335,17 @@ local function merge_and_fly(ids, food, delay, target_node, on_arrive)
 			gui.animate(n, "scale", V3(0.5, 0.5, 1), gui.EASING_INBACK, 0.2, 0.06, function() gui.delete_node(n) end)
 		end
 		ui.after(0.18, function()
-			audio.play("match")
+			V.combo = (V.combo or 0) + 1
+			V.combo_timer = 0
+			local pitch = math.min(1.35, 1.0 + (V.combo - 1) * 0.08)
+			audio.play("match", 1.0, pitch)
 			ui.burst(V.fx, mid.x, mid.y, 7, ui.GOLD, 90)
+			if V.combo >= 2 then
+				local ct = ui.text(V.fx, i18n.get("COMBO") .. " x" .. V.combo .. "!", mid.x, mid.y + 35, 30, ui.GOLD)
+				ui.pop(ct, 0.2, 1.15, 0.15)
+				gui.animate(ct, "position.y", mid.y + 70, gui.EASING_OUTQUAD, 0.45)
+				gui.animate(ct, "color.w", 0, gui.EASING_INQUAD, 0.45, 0.12, function() gui.delete_node(ct) end)
+			end
 			local dish = ui.box(V.fx, food_sprite(food), mid.x, mid.y, 84, 84)
 			ui.pop(dish, 0.4, 1.25, 0.15)
 			local to = fx_pos(target_node)
@@ -374,6 +388,19 @@ handlers.slot = function()
 	relayout_tray(V.matched and 0.32 or 0)
 	update_progress()
 	local n = #V.s.slot
+	if n >= 6 and V.s.status == "play" then
+		ui.shake(V.tray, 8)
+		gui.animate(V.tray_bg, "color", H("#e63946"), gui.EASING_OUTQUAD, 0.15)
+	elseif n == 5 and V.s.status == "play" then
+		ui.pulse(V.tray, 1.04, 0.25)
+		gui.animate(V.tray_bg, "color", H("#d9822b"), gui.EASING_OUTQUAD, 0.15)
+	else
+		gui.animate(V.tray_bg, "color", H("#b9784a"), gui.EASING_OUTQUAD, 0.2)
+		if V.last_slot_count and V.last_slot_count >= 5 and n <= 4 then
+			ui.burst(V.tray, 0, 0, 8, ui.GOLD, 100)
+		end
+	end
+	V.last_slot_count = n
 	if n >= config.SLOT_COUNT - 2 and V.s.status == "play" then
 		tip_once("full", i18n.get("TIP_FULL"))
 	end
@@ -395,7 +422,12 @@ handlers.serve = function(e)
 		ui.pop(item.check, 0.2, 1, 0.3)
 		gui.set_color(item.icon, vmath.vector4(1, 1, 1, 0.45))
 		audio.play("serve")
+		ui.burst(V.fx, fx_pos(item.icon).x, fx_pos(item.icon).y, 6, ui.GOLD, 70)
+		gui.animate(sv.avatar, "position.y", 46, gui.EASING_OUTBACK, 0.18, 0, function()
+			gui.animate(sv.avatar, "position.y", 34, gui.EASING_INOUTSINE, 0.18)
+		end)
 		fly_coins(item.icon, e.coins)
+		V.app.mission_check()
 	end)
 	if V.tutorial and not V.tutorial_served then
 		V.tutorial_served = true
@@ -421,8 +453,13 @@ end
 
 handlers.arrive = function(e)
 	if V.seats[e.seat] then leave_seat(e.seat, true) end
-	build_seat(e.seat, V.s.seats[e.seat], true)
+	local sv = build_seat(e.seat, V.s.seats[e.seat], true)
 	audio.play("arrive", 0.7)
+	if e.vip then
+		audio.play("star")
+		ui.after(0.45, function() ui.burst(sv.root, 0, 110, 10, ui.GOLD, 110) end)
+		tip_once("vip", i18n.get("VIP_TIP"))
+	end
 end
 
 handlers.leave = function(e)
@@ -432,6 +469,7 @@ handlers.leave = function(e)
 	end
 	if not e.happy then tip_once("angry", i18n.get("TIP_ANGRY")) end
 	leave_seat(e.seat, e.happy)
+	if e.happy then V.app.mission_check() end
 end
 
 handlers.blocked = function(e)
@@ -614,13 +652,18 @@ function M.build(app, parent)
 	V.coins_label = ui.text(cp, "", 18, 1, 32)
 	coins_text()
 	local lx = portrait and ((-half + 230) + (half - 100)) / 2 or 0
-	local lp = ui.slice(hud, "panel", lx, 0, 250, 66, H("#4a2a1a", 0.82), 30)
+	local lp = ui.slice(hud, "panel", lx, 0, 250, 66, s.params.hard and H("#9b2226", 0.9) or H("#4a2a1a", 0.82), 30)
 	local lt = ui.text(lp, i18n.get("LEVEL", { n = s.level }), 0, 10, 30)
 	ui.fit(lt, 230, 30)
 	ui.slice(lp, "bar", 0, -18, 216, 16, H("#000000", 0.35), 6)
 	V.progress_fill = ui.slice(lp, "bar", -105, -18, 10, 12, ui.GOLD, 5)
 	gui.set_pivot(V.progress_fill, gui.PIVOT_W)
 	update_progress()
+	if (progress.data.streak or 0) >= 2 then
+		local st_badge = ui.box(lp, "btn_round", 116, 22, 38, 38, H("#e76f51"))
+		ui.icon(st_badge, "icon_fire", 0, 1, 24)
+		ui.pulse(st_badge, 1.1, 0.6)
+	end
 	local pause = ui.box(hud, "btn_round", half - 60, 0, 78, 78, ui.ORANGE)
 	ui.icon(pause, "icon_pause", 0, 3, 40)
 	ui.button(pause, 90, 90, function() V.app.pause() end)
@@ -638,14 +681,32 @@ end
 
 function M.intro()
 	local food = levels.new_food(V.s.level)
+	local delay = 0
 	if food and not V.tutorial then
 		M.toast(i18n.get("NEW_DISH"), food_sprite(food), 2.4)
+		delay = 2.6
 	end
+	if V.s.params.hard then
+		ui.after(delay, function() M.toast(i18n.get("HARD_LEVEL"), "icon_fire", 2.6) end)
+	end
+end
+
+-- coins paid from the HUD total (continue for coins)
+function M.spend_coins(n)
+	V.coins_shown = V.coins_shown - n
+	coins_text()
+	ui.shake(V.coin_icon, 10)
 end
 
 function M.update(dt)
 	if not V.s then return end
 	update_patience()
+	if V.combo and V.combo > 0 then
+		V.combo_timer = (V.combo_timer or 0) + dt
+		if V.combo_timer > 2.5 then
+			V.combo = 0
+		end
+	end
 	if V.s.status == "play" and not V.tutorial then
 		local before = V.idle
 		V.idle = V.idle + dt

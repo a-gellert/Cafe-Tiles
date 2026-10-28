@@ -161,6 +161,15 @@ images {
   image: "/main/assets/images/icon_star.png"
 }
 images {
+  image: "/main/assets/images/icon_chest.png"
+}
+images {
+  image: "/main/assets/images/icon_fire.png"
+}
+images {
+  image: "/main/assets/images/icon_tasks.png"
+}
+images {
   image: "/main/assets/images/icon_lock.png"
 }
 images {
@@ -171,6 +180,12 @@ images {
 }
 images {
   image: "/main/assets/images/star.png"
+}
+images {
+  image: "/main/assets/images/chest.png"
+}
+images {
+  image: "/main/assets/images/crown.png"
 }
 images {
   image: "/main/assets/images/heart.png"

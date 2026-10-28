@@ -1,0 +1,45 @@
+Running...
+
+[poki] gameLoadingFinished
+INFO:DLIB: Log server started on port 0
+
+INFO:GRAPHICS: Installed graphics device 'ADAPTER_FAMILY_OPENGL'
+
+INFO:ENGINE: Defold Engine 1.14.0 (a81dbb0)
+
+%c    %c    Made with Defold    %c    %c    https://www.defold.com background: #fd6623; padding:5px 0; border: 5px; background: #272c31; color: #fafafa; padding:5px 0; background: #39a3e4; padding:5px 0; background: #ffffff; color: #000000; padding:5px 0;
+INFO:PROFILER: Skipped ProfilerJS profiler due to setting profiler.performance_timeline_enabled
+
+INFO:GRAPHICS: Checking ASTC Array support. May produce GL error.
+
+INFO:ENGINE: Loading data from: archive:game.dmanifest
+
+INFO:SOUND: Info
+
+INFO:SOUND:   nSamplesPerSec:   48000
+
+INFO:SOUND:   DSP backend: Fallback
+
+INFO:SOUND: Sound
+
+INFO:SOUND:   nSamplesPerSec:   48000
+
+INFO:SOUND:        useThread:   0
+
+INFO:ENGINE: Initialised sound device 'default'
+
+INFO:PHYSICS: Created physics context: Box2D v2.2.1
+
+[poki] measure level 1 start
+DEBUG:SCRIPT: [cafe]	level	1	start, tiles	18	streak	0
+
+[poki] gameplayStart
+[poki] gameplayStop
+[poki] measure level 1 complete
+DEBUG:SCRIPT: [cafe]	level	1	won	stars	3	coins	60	waste	0	angry	0	chances	0
+
+[poki] measure rewarded double-coins visible
+[poki] measure level 2 start
+DEBUG:SCRIPT: [cafe]	level	2	start, tiles	27	streak	1
+
+[poki] gameplayStart

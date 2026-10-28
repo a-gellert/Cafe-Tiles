@@ -22,6 +22,9 @@ local function defaults()
 		lang = "",
 		stars = {},
 		tips = {},
+		missions = { list = {}, done = 0, serial = 0 },
+		star_chest = 0,
+		streak = 0,
 	}
 end
 
@@ -76,11 +79,53 @@ function M.can_decorate()
 	return p ~= nil and M.data.coins >= p
 end
 
+function M.streak_mult()
+	local s = M.data.streak or 0
+	if s >= 3 then
+		return 1 + (config.STREAK_BONUS[3] or 0.30)
+	elseif s == 2 then
+		return 1 + (config.STREAK_BONUS[2] or 0.15)
+	end
+	return 1
+end
+
+function M.reset_streak()
+	if (M.data.streak or 0) > 0 then
+		M.data.streak = 0
+		M.save()
+	end
+end
+
+function M.star_chest_progress()
+	return M.data.star_chest or 0, config.STAR_CHEST_GOAL
+end
+
+function M.can_open_star_chest()
+	return (M.data.star_chest or 0) >= config.STAR_CHEST_GOAL
+end
+
+function M.open_star_chest()
+	if not M.can_open_star_chest() then return nil end
+	M.data.star_chest = math.max(0, (M.data.star_chest or 0) - config.STAR_CHEST_GOAL)
+	M.add_coins(config.STAR_CHEST_COINS)
+	local booster_pool = { "undo", "shuffle", "rush" }
+	local b = booster_pool[math.random(#booster_pool)]
+	M.data.boosters[b] = (M.data.boosters[b] or 0) + 1
+	M.save()
+	return {
+		coins = config.STAR_CHEST_COINS,
+		booster = b,
+		star_chest = M.data.star_chest,
+	}
+end
+
 function M.finish_level(level, stars, coins)
 	local best = M.data.stars[level] or 0
 	if stars > best then M.data.stars[level] = stars end
 	M.add_coins(coins)
 	if level >= M.data.level then M.data.level = level + 1 end
+	M.data.star_chest = (M.data.star_chest or 0) + stars
+	M.data.streak = (M.data.streak or 0) + 1
 	M.save()
 end
 

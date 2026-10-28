@@ -1,11 +1,19 @@
 -- Headless balance check: plays levels with the hint bot (session.suggest).
 -- usage (from the project root, LuaJIT from the Defold editor):
 --   luajit-64.exe tools/sim.lua [first_level] [last_level] [seconds_per_tap]
+-- "min" = estimated session minutes (taps * seconds_per_tap + LEVEL_OVERHEAD per level),
+-- "tasks" = chef's tasks finished on that level, "2nd" = ad chances + coin continues.
 package.path = "./?.lua;" .. package.path
 
 local session = require "main.modules.session"
 local levels = require "main.modules.levels"
 local config = require "main.modules.config"
+local missions = require "main.modules.missions"
+
+local LEVEL_OVERHEAD = 9 -- seconds: result popup, tasks screen, level intro
+math.randomseed(1)
+local mstate = { list = {}, done = 0, serial = 0 }
+local wallet, minutes, tasks_total, vips_total = 0, 0, 0, 0
 
 local first = tonumber(arg[1]) or 1
 local last = tonumber(arg[2]) or 60
@@ -13,7 +21,7 @@ local tap_time = tonumber(arg[3]) or 0.9
 
 local totals = { won = 0, lost = 0, chances = 0, coins = 0, stars = 0 }
 print(string.format("%-4s %-5s %-3s %-5s %-4s %-5s %-5s %-4s %-5s %-5s %-5s %-5s %-6s",
-	"lvl", "tiles", "lay", "grid", "typ", "free0", "res", "2nd", "waste", "angry", "stars", "coins", "taps"))
+	"lvl", "tiles", "lay", "grid", "typ", "free0", "res", "2nd", "waste", "angry", "stars", "coins", "taps") .. " vip tasks min")
 for level = first, last do
 	local s = session.new(level)
 	local p = s.params
@@ -30,8 +38,13 @@ for level = first, last do
 		session.update(s, tap_time)
 		if s.status == "won" then outcome = "won" break end
 		if s.status == "jam" then
+			local cost = config.CONTINUE_COST_BASE + config.CONTINUE_COST_PER_LEVEL * level
 			if session.can_second_chance(s) then
 				session.second_chance(s)
+				used = used + 1
+			elseif session.can_second_chance(s, true) and wallet >= cost then
+				wallet = wallet - cost
+				session.second_chance(s, true)
 				used = used + 1
 			else
 				outcome = "LOST"
@@ -46,13 +59,26 @@ for level = first, last do
 		s.events = {}
 	end
 	local r = session.result(s)
+	local finished = 0
+	if outcome == "won" then
+		wallet = wallet + r.coins
+		missions.ensure(mstate, level)
+		local rep = missions.apply(mstate, level, r)
+		wallet = wallet + rep.coins
+		for _, row in ipairs(rep.rows) do
+			if row.done then finished = finished + 1 end
+		end
+	end
+	tasks_total = tasks_total + finished
+	vips_total = vips_total + s.vips
+	minutes = minutes + (taps * tap_time + LEVEL_OVERHEAD) / 60
 	if outcome == "won" then totals.won = totals.won + 1 else totals.lost = totals.lost + 1 end
 	totals.chances = totals.chances + used
 	totals.coins = totals.coins + r.coins
 	totals.stars = totals.stars + r.stars
 	print(string.format("%-4d %-5d %-3d %-5s %-4d %-5d %-5s %-4d %-5d %-5d %-5d %-5d %-6d",
 		level, s.total, max_z + 1, s.cols .. "x" .. s.rows, p.types, free0, outcome, used,
-		r.waste, r.angry, r.stars, r.coins, taps))
+		r.waste, r.angry, r.stars, r.coins, taps) .. string.format(" %-3d %-5d %.1f", s.vips, finished, minutes))
 	-- sanity: the deal must keep every food a multiple of 3
 	local count = {}
 	for _, t in ipairs(s.board.tiles) do count[t.type] = (count[t.type] or 0) + 1 end
@@ -61,5 +87,5 @@ for level = first, last do
 	end
 	if s.total ~= p.triples * 3 then print("  !! layout gave " .. s.total .. " tiles, wanted " .. p.triples * 3) end
 end
-print(string.format("won %d, lost %d, second chances %d, coins %d, avg stars %.2f",
-	totals.won, totals.lost, totals.chances, totals.coins, totals.stars / (last - first + 1)))
+print(string.format("won %d, lost %d, second chances %d, coins %d, avg stars %.2f, vip %d, tasks %d, %.1f min",
+	totals.won, totals.lost, totals.chances, totals.coins, totals.stars / (last - first + 1), vips_total, tasks_total, minutes))
