@@ -1,0 +1,8 @@
+{
+  "name": "cafe-tiles-tools",
+  "private": true,
+  "description": "Asset generators for Cafe Tiles (run from the project root: node tools/gen_sounds.js)",
+  "dependencies": {
+    "wasm-media-encoders": "0.7.0"
+  }
+}

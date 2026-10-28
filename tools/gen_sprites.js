@@ -117,7 +117,7 @@ const mix = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);
 const vgrad = (c1, c2, y0, y1) => (x, y) => mix(c1, c2, clamp01((y - y0) / (y1 - y0)));
 const darker = (c, k = 0.8) => [c[0] * k, c[1] * k, c[2] * k, c[3]];
 const lighter = (c, k = 0.35) => mix(c, [1, 1, 1, c[3]], k);
-const OUTC = H('#4a2a1a');
+const OUTC = H('#4f2a3a');   // cocoa-plum outline
 const WHITE = [1, 1, 1, 1];
 const SHINE = [1, 1, 1, 0.45];
 
@@ -377,22 +377,45 @@ const S = 112;
   c.save('food_cheese');
 }
 
-// ======================================================================= TILE
-{
-  const c = canvas(112, 124);
-  const face = rbox(56, 54, 52, 52, 16);
-  const side = rbox(56, 64, 52, 56, 16);
-  c.parts([[side, vgrad(H('#efc79b'), H('#d9a46f'), 60, 120)], [face, vgrad(H('#fffaf1'), H('#f7ead6'), 4, 106)]], 3.5);
-  c.fill(sub(face, rbox(56, 54, 47, 47, 13)), [1, 1, 1, 0.55]);
-  c.save('tile');
+// ======================================================================= TILES (124x144)
+// A thick candy tile: cream face, coloured side, soft shadow baked under it (the face
+// center is 14 px above the sprite center: game_view FACE_DY).
+function tile(faceTop, faceBot, sideTop, sideBot, rim) {
+  const c = canvas(124, 144);
+  c.soft((x, y) => 0.3 * clamp01(1 - (rbox(62, 78, 50, 56, 22)(x, y) + 3) / 13), [0.32, 0.1, 0.22]);
+  const face = rbox(62, 58, 52, 52, 20);
+  const side = rbox(62, 70, 52, 58, 20);
+  c.fill(grow(side, 3.2), OUTC);
+  c.fill(side, vgrad(sideTop, sideBot, 70, 128));
+  c.fill(inter(side, below(119)), rim);
+  c.fill(grow(face, 1.2), darker(sideBot, 0.92));
+  c.fill(face, vgrad(faceTop, faceBot, 6, 110));
+  c.fill(sub(face, rbox(62, 58, 47.5, 47.5, 16)), [1, 1, 1, 0.65]);
+  c.fill(ellipseR(36, 21, 17, 5.5, -10), [1, 1, 1, 0.75]);
+  c.fill(circle(96, 18, 3), [1, 1, 1, 0.8]);
+  return c;
 }
+tile(H('#fffdf9'), H('#fff0e8'), H('#ffc9d8'), H('#f496b3'), H('#e3809f')).save('tile');
 {
-  const c = canvas(128, 140);
-  c.soft((x, y) => {
-    const d = rbox(64, 70, 54, 60, 18)(x, y);
-    return d < 0 ? 1 : 1 - d / 9;
-  }, [1, 1, 1]);
-  c.save('tile_glow');
+  const c = tile(H('#fffbe6'), H('#ffe9a6'), H('#ffe07a'), H('#f2b22c'), H('#d9961a'));
+  for (const [x, y, r] of [[20, 96, 7], [104, 30, 6], [100, 98, 4.5]]) c.fill(star(x, y, r, r * 0.38, 4, -90, 0.5), [1, 1, 1, 0.9]);
+  c.save('tile_gold');
+}
+{ // white face, added on top when a tile becomes free (additive flash)
+  const c = canvas(112, 112);
+  c.soft((x, y) => clamp01(1 - (rbox(56, 56, 51, 51, 20)(x, y) + 1) / 3), [1, 1, 1]);
+  c.save('tile_flash');
+}
+{ // silver cloche over a hidden dish
+  const c = canvas(112, 104);
+  const dome = union(inter(ellipse(56, 78, 46, 54), above(80)), rbox(56, 84, 52, 7, 6));
+  const knob = union(circle(56, 20, 8), rbox(56, 28, 4, 5, 2));
+  c.parts([[knob, vgrad(H('#ffffff'), H('#c7c9d9'), 12, 32)], [dome, vgrad(H('#fbfbff'), H('#b9bccf'), 24, 92)]], 3.5);
+  c.fill(rbox(56, 84, 52, 3, 2), H('#a6a9bf'));
+  c.fill(ellipseR(34, 52, 7, 18, 28), [1, 1, 1, 0.85]);
+  c.fill(circle(52, 17, 2.5), [1, 1, 1, 0.9]);
+  c.fill(star(80, 46, 6, 2.3, 4, -90, 0.5), [1, 1, 1, 0.95]);
+  c.save('cloche');
 }
 
 // ======================================================================= CUSTOMERS (160x160)
@@ -538,11 +561,6 @@ customer('penguin', H('#34495e'), H('#ffd166'), {
 }
 { const c = canvas(16, 16); c.fill(rbox(8, 8, 8, 8, 0), WHITE); c.save('square'); }
 { const c = canvas(32, 32); c.fill(rbox(16, 16, 15, 15, 8), WHITE); c.save('bar'); }
-{ // soft round shadow
-  const c = canvas(96, 40);
-  c.soft((x, y) => 1 - len((x - 48) / 46, (y - 20) / 18), [0, 0, 0]);
-  c.save('shadow');
-}
 
 // ======================================================================= ICONS (white glyphs 96x96)
 function icon(name, f) {
@@ -601,7 +619,6 @@ icon('music_off', c => {
 });
 icon('check', c => c.fill(polyline([[18, 50], [40, 72], [80, 26]], 8), WHITE));
 icon('close', c => { c.fill(capsule(22, 22, 74, 74, 8), WHITE); c.fill(capsule(74, 22, 22, 74, 8), WHITE); });
-icon('plus', c => { c.fill(capsule(48, 18, 48, 78, 9), WHITE); c.fill(capsule(18, 48, 78, 48, 9), WHITE); });
 icon('gear', c => {
   const teeth = [];
   for (let i = 0; i < 8; i++) {
@@ -628,7 +645,6 @@ icon('globe', c => {
   c.fill(inter(circle(48, 48, 34), (x, y) => Math.abs(y - 30) - 2.5), WHITE);
   c.fill(inter(circle(48, 48, 34), (x, y) => Math.abs(y - 66) - 2.5), WHITE);
 });
-icon('star', c => c.fill(star(48, 52, 44, 20, 5, -90, 3), WHITE));
 icon('chest', c => {
   c.fill(rbox(48, 64, 36, 22, 6), WHITE);
   c.fill(rbox(48, 36, 38, 12, 6), WHITE);
@@ -653,11 +669,6 @@ icon('tasks', c => {
   c.fill(polyline([[28, 62], [33, 67], [41, 57]], 3.5), WHITE);
   c.fill(capsule(48, 62, 66, 62, 3.5), WHITE);
 });
-icon('lock', c => {
-  c.fill(inter(ring(48, 40, 20, 9), above(44)), WHITE);
-  c.fill(rbox(48, 64, 30, 24, 8), WHITE);
-});
-icon('arrow', c => c.fill(union(rbox(40, 48, 26, 10, 4), poly([[56, 20], [88, 48], [56, 76]], 4)), WHITE));
 
 // ======================================================================= BAKED ICONS
 { // coin
@@ -776,6 +787,50 @@ icon('arrow', c => c.fill(union(rbox(40, 48, 26, 10, 4), poly([[56, 20], [88, 48
   c.save('glow');
 }
 
+{ // soft ring (shockwave)
+  const c = canvas(96, 96);
+  c.soft((x, y) => Math.exp(-Math.pow((len(x - 48, y - 48) - 40) / 4.5, 2)), [1, 1, 1]);
+  c.save('ring');
+}
+{ // white heart for tinted particles
+  const c = canvas(48, 48);
+  c.fill(union(circle(16, 17, 11), circle(32, 17, 11), poly([[6.5, 22], [41.5, 22], [24, 42]], 2.5)), WHITE);
+  c.save('heart_w');
+}
+{ // vertical gradient, white -> transparent (background tint)
+  const c = canvas(4, 128);
+  c.soft((x, y) => 1 - y / 128, [1, 1, 1]);
+  c.save('grad');
+}
+{ // tiny hearts and dots, tiled over the background (white, tinted)
+  const c = canvas(128, 128);
+  const heart = (x, y, r) => union(circle(x - r * 0.5, y - r * 0.2, r * 0.55), circle(x + r * 0.5, y - r * 0.2, r * 0.55), poly([[x - r * 1.02, y + r * 0.05], [x + r * 1.02, y + r * 0.05], [x, y + r * 1.1]], 0.5));
+  c.fill(heart(32, 30, 9), WHITE);
+  c.fill(heart(96, 94, 9), WHITE);
+  for (const [x, y, r] of [[96, 30, 4], [32, 94, 4], [64, 62, 3], [0, 62, 3], [64, 0, 3], [64, 128, 3], [128, 62, 3]]) c.fill(circle(x, y, r), WHITE);
+  c.save('pat_hearts');
+}
+{ // tablecloth under the board (slice9 36): rose hem, cream cloth, stitched line
+  const c = canvas(112, 112);
+  c.fill(rbox(56, 56, 55, 55, 34), H('#f4a3bd'));
+  c.fill(rbox(56, 54, 51, 51, 30), H('#fff7f3'));
+  c.fill(sub(rbox(56, 54, 44, 44, 24), rbox(56, 54, 42, 42, 22)), H('#f9c6d5'));
+  c.save('cloth');
+}
+{ // gift box
+  const c = canvas(112, 112);
+  const box = rbox(56, 74, 38, 30, 7);
+  const lid = rbox(56, 44, 45, 11, 7);
+  const bow = union(ellipseR(40, 24, 15, 9, -25), ellipseR(72, 24, 15, 9, 25));
+  c.parts([[bow, vgrad(H('#fff1a8'), H('#ffc93c'), 12, 36)], [box, vgrad(H('#ff9fbe'), H('#f0709a'), 46, 104)], [lid, vgrad(H('#ffb3cb'), H('#f27ea4'), 33, 55)]], 4);
+  c.fill(rbox(56, 74, 8, 30, 2), H('#ffd23f'));
+  c.fill(rbox(56, 44, 8, 11, 2), H('#ffe066'));
+  c.fill(circle(56, 30, 7), H('#ffd23f'));
+  c.fill(ellipseR(38, 40, 10, 3.5, -8), [1, 1, 1, 0.55]);
+  c.fill(ellipseR(34, 66, 4, 12, 0), [1, 1, 1, 0.3]);
+  c.save('gift');
+}
+
 // ======================================================================= CAFE DECOR
 { // wall patterns (white, tinted; tiled by the GUI)
   let c = canvas(64, 64);
@@ -828,7 +883,8 @@ icon('arrow', c => c.fill(union(rbox(40, 48, 26, 10, 4), poly([[56, 20], [88, 48
   const c = canvas(80, 140);
   c.fill(rbox(40, 34, 2, 34, 1), H('#3a2418'));
   const shade = poly([[8, 104], [72, 104], [56, 66], [24, 66]], 5);
-  c.parts([[shade, vgrad(H('#2a9d8f'), H('#1d7268'), 66, 104)]], 3);
+  c.parts([[shade, vgrad(H('#ffa8c2'), H('#f07a9e'), 66, 104)]], 3);
+  c.fill(rbox(40, 101, 32, 3, 1.5), H('#ffd76a'));
   c.fill(rbox(40, 66, 10, 4, 2), H('#3a2418'));
   c.fill(circle(40, 110, 9), H('#fff1a8'));
   c.fill(ellipse(30, 80, 4, 10), [1, 1, 1, 0.3]);
@@ -890,7 +946,7 @@ icon('arrow', c => c.fill(union(rbox(40, 48, 26, 10, 4), poly([[56, 20], [88, 48
   const c = canvas(130, 140);
   const body = rbox(65, 74, 52, 60, 12);
   const top = rbox(65, 18, 46, 8, 6);
-  c.parts([[top, H('#c9c9d1')], [body, vgrad(H('#ff6b6b'), H('#d64545'), 14, 134)]], 4);
+  c.parts([[top, H('#c9c9d1')], [body, vgrad(H('#ffa3bd'), H('#ec7398'), 14, 134)]], 4);
   c.fill(rbox(65, 92, 40, 30, 8), H('#3a2f33'));
   c.fill(rbox(65, 70, 14, 6, 3), H('#c9c9d1'));
   c.fill(rbox(65, 104, 11, 12, 3), WHITE);
@@ -933,11 +989,57 @@ icon('arrow', c => c.fill(union(rbox(40, 48, 26, 10, 4), poly([[56, 20], [88, 48
   const chairR = union(rbox(154, 70, 8, 34, 4), rbox(144, 92, 18, 5, 3), rbox(156, 114, 3, 16, 1), rbox(132, 114, 3, 16, 1));
   const top = ellipse(90, 60, 54, 12);
   const leg = union(rbox(90, 92, 5, 30, 2), ellipse(90, 122, 24, 6));
-  c.parts([[chairL, H('#ff9f1c')], [chairR, H('#ff9f1c')], [leg, H('#5a4a44')], [top, H('#fffaf1')]], 3.5);
+  c.parts([[chairL, H('#ffa3bd')], [chairR, H('#ffa3bd')], [leg, H('#7a5a68')], [top, H('#fffaf1')]], 3.5);
   c.fill(ellipse(90, 57, 46, 7), [1, 1, 1, 0.6]);
   c.fill(rbox(82, 46, 7, 9, 3), H('#ffffff'));
   c.fill(ellipse(82, 38, 7, 2.5), H('#7a4422'));
   c.save('table');
+}
+
+{ // flower vase (decor "flowers" tier 1)
+  const c = canvas(96, 124);
+  const vase = union(ellipse(48, 96, 22, 22), rbox(48, 72, 10, 10, 4));
+  const leaves = [ellipseR(30, 58, 6, 16, -40), ellipseR(66, 58, 6, 16, 40), ellipseR(48, 50, 5, 14, 0)];
+  const blooms = [[48, 30, '#ff7aa2'], [28, 42, '#ffb3c8'], [68, 40, '#c9a7ff'], [40, 20, '#ffd1dc'], [60, 22, '#ff9fbd']];
+  c.parts([...leaves.map(l => [l, H('#6cc98a')]), ...blooms.map(([x, y, col]) => [circle(x, y, 11), H(col)]), [vase, vgrad(H('#a7e8d6'), H('#5fc4ab'), 66, 118)]], 3.5);
+  for (const [x, y, col] of blooms) {
+    for (let k = 0; k < 5; k++) {
+      const a = k * Math.PI * 2 / 5;
+      c.fill(circle(x + Math.cos(a) * 5, y + Math.sin(a) * 5, 4.2), lighter(H(col), 0.25));
+    }
+    c.fill(circle(x, y, 3.2), H('#ffe27a'));
+  }
+  c.fill(ellipseR(38, 92, 4, 11, 10), [1, 1, 1, 0.45]);
+  c.save('vase');
+}
+{ // window flower box (tier 2)
+  const c = canvas(176, 64);
+  const box = rbox(88, 46, 80, 15, 6);
+  const blooms = [];
+  for (let i = 0; i < 9; i++) blooms.push([20 + i * 17, 22 + (i % 2) * 7, ['#ff7aa2', '#ffd1dc', '#c9a7ff', '#ffb3c8'][i % 4]]);
+  const leaves = blooms.map(([x, y], i) => ellipseR(x + (i % 2 ? 6 : -6), y + 10, 6, 10, i % 2 ? 35 : -35));
+  c.parts([...leaves.map(l => [l, H('#6cc98a')]), ...blooms.map(([x, y, col]) => [circle(x, y, 8.5), H(col)]), [box, vgrad(H('#ffb3c8'), H('#f08aa8'), 31, 61)]], 3);
+  for (const [x, y] of blooms) c.fill(circle(x, y, 3), H('#ffe27a'));
+  c.fill(rbox(88, 40, 74, 2, 1), [1, 1, 1, 0.45]);
+  c.save('flower_box');
+}
+{ // hanging flower garland (tier 3, tiled along the awning)
+  const c = canvas(256, 64);
+  const wire = [];
+  for (let i = 0; i <= 32; i++) wire.push([i * 8, 8 + Math.sin(i / 32 * Math.PI) * 22]);
+  c.fill(polyline(wire, 1.8), H('#5fae74'));
+  const cols = ['#ff7aa2', '#ffd1dc', '#c9a7ff', '#ffb3c8', '#ff9fbd', '#ffe27a', '#ffc2d4'];
+  for (let i = 0; i < 8; i++) {
+    const x = 16 + i * 32, y = 8 + Math.sin(x / 256 * Math.PI) * 22;
+    c.fill(ellipseR(x - 9, y + 4, 4, 8, -50), H('#6cc98a'));
+    c.fill(ellipseR(x + 9, y + 4, 4, 8, 50), H('#6cc98a'));
+    for (let k = 0; k < 5; k++) {
+      const a = k * Math.PI * 2 / 5 - Math.PI / 2;
+      c.fill(circle(x + Math.cos(a) * 5.5, y + 8 + Math.sin(a) * 5.5, 5), H(cols[i % cols.length]));
+    }
+    c.fill(circle(x, y + 8, 3.4), H('#ffe27a'));
+  }
+  c.save('flower_garland');
 }
 
 // ======================================================================= atlas + preview

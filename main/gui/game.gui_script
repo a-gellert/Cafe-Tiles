@@ -98,6 +98,20 @@ function app.open_chest()
 	if reward then app.open_child("chest", reward) end
 end
 
+-- session gift (minutes of play): from the HUD, the menu or the win popup
+function app.open_gift()
+	local reward = progress.claim_gift()
+	if not reward then return end
+	poki.measure("gift", progress.gifts_taken, "claim")
+	if app.popup then
+		app.open_child("chest", reward)
+	else
+		if app.screen == "game" then poki.gameplay_stop() end
+		app.open_popup("chest", reward)
+	end
+	if app.screen == "game" then game_view.refresh_gift() end
+end
+
 function app.continue_cost()
 	return config.CONTINUE_COST_BASE + config.CONTINUE_COST_PER_LEVEL * (app.session and app.session.level or 1)
 end
@@ -339,11 +353,15 @@ local function autoplay_step()
 			app.next_level()
 		elseif kind == "jam" then
 			if session.can_second_chance(app.session) then app.second_chance() else app.retry() end
+		elseif kind == "chest" then
+			app.dismiss()
 		else
 			app.close_popup()
 		end
 	elseif app.screen == "menu" then
 		app.play()
+	elseif progress.gift_ready() and app.session and app.session.status == "play" then
+		app.open_gift()
 	elseif app.session and app.session.status == "play" then
 		local id = session.suggest(app.session)
 		if id and game_view.tap_tile(id) then poki.gameplay_start() end
@@ -373,12 +391,16 @@ function init(self)
 	else
 		app.show_menu()
 	end
-	-- visual QA: open a popup right away (cafe.debug_popup = win | jam | pause | decor | settings)
+	-- visual QA: open a popup right away (cafe.debug_popup = win | jam | pause | decor | settings | gift)
 	local dp = sys.get_config_string("cafe.debug_popup", "")
 	if dp ~= "" then
 		if dp ~= "decor" and dp ~= "settings" then app.start_level(progress.data.level, true) end
 		if dp == "jam" then app.session.status = "jam" end
-		app.open_popup(dp, dp == "win" and { stars = 2, coins = 128, earned = 92, bonus = 36, waste = 2, angry = 1, served = 9 } or nil)
+		if dp == "gift" then
+			app.open_popup("chest", { coins = 25, booster = "rush", gift = true })
+		else
+			app.open_popup(dp, dp == "win" and { stars = 3, coins = 128, earned = 92, bonus = 36, waste = 0, angry = 0, served = 9, streak = 2 } or nil)
+		end
 	end
 end
 
@@ -395,6 +417,8 @@ function update(self, dt)
 	end
 	if poki.is_ad_active() then return end
 	if app.screen == "game" and app.session and not app.popup then
+		-- the gift track counts real level play only
+		if app.session.running and app.session.status == "play" then progress.play_time = progress.play_time + dt end
 		session.update(app.session, dt)
 		if #app.session.events > 0 then game_view.process() end
 		game_view.update(dt)

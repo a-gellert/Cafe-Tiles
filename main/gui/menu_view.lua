@@ -11,6 +11,7 @@ local M = {}
 
 local V3 = vmath.vector3
 local H = ui.hex
+local PILL = H("#6b2f5c", 0.85)
 
 local function round_button(parent, x, y, size, color, icon, label, fn, max_label)
 	local b = ui.box(parent, "btn_round", x, y, size, size, color)
@@ -39,23 +40,35 @@ function M.build(app, parent)
 		local a = ui.box(cv.seats, "cust_" .. config.CUSTOMERS[kinds[i]], vw * x / k, 34, 150, 150)
 		gui.animate(a, "position.y", 44, gui.EASING_INOUTSINE, 0.9 + i * 0.2, 0, nil, gui.PLAYBACK_LOOP_PINGPONG)
 	end
+	ui.ambient(ui.pane(root, 0, 0), vw, vh, 14)
 
 	-- title
-	local ty = vh - (portrait and 190 or 130)
-	local title = ui.text(root, i18n.get("TITLE"), vw / 2, ty, portrait and 104 or 96, H("#ffb347"), H("#5a2e14"))
-	ui.fit(title, vw - 60, portrait and 104 or 96)
-	gui.animate(title, "position.y", ty + 8, gui.EASING_INOUTSINE, 1.4, 0, nil, gui.PLAYBACK_LOOP_PINGPONG)
+	local ty = vh - (portrait and 262 or 130)
+	-- a sticker title: plum drop shadow, pink letters with a white rim
+	local tsize = portrait and 108 or 100
+	local tpane = ui.pane(root, vw / 2, ty)
+	local shadow = ui.text(tpane, i18n.get("TITLE"), 0, -7, tsize, H("#b4467a"), H("#b4467a"))
+	local title = ui.text(tpane, i18n.get("TITLE"), 0, 0, tsize, H("#ff6fa8"), ui.WHITE)
+	ui.fit(shadow, vw - 60, tsize)
+	ui.fit(title, vw - 60, tsize)
+	gui.animate(tpane, "position.y", ty + 8, gui.EASING_INOUTSINE, 1.4, 0, nil, gui.PLAYBACK_LOOP_PINGPONG)
+	local tw = ui.text_width(title) * gui.get_scale(title).x
+	for k, sx in ipairs({ -0.5, 0.5, -0.22, 0.3 }) do
+		local sp = ui.glow(ui.box(tpane, "spark", tw * sx, (k % 2 == 0 and 44 or -40), 46, 46, ui.WHITE))
+		gui.animate(sp, "scale", V3(0.2, 0.2, 1), gui.EASING_INOUTSINE, 0.7 + k * 0.17, 0, nil, gui.PLAYBACK_LOOP_PINGPONG)
+		gui.animate(sp, "euler.z", 180, gui.EASING_LINEAR, 3, 0, nil, gui.PLAYBACK_LOOP_FORWARD)
+	end
 	local rating = decor.rating(progress.data.decor)
-	local rp = ui.slice(root, "panel", vw / 2, ty - 92, 380, 54, H("#4a2a1a", 0.8), 26)
+	local rp = ui.slice(root, "panel", vw / 2, ty - 92, 380, 54, PILL, 26)
 	ui.box(rp, "star", -160, 2, 46, 46)
 	local rt = ui.text(rp, i18n.get("RATING") .. "  " .. rating .. "/" .. decor.max_rating(), 14, 1, 28)
 	ui.fit(rt, 300, 28)
 
 	-- coins + settings
-	local cp = ui.slice(root, "panel", 175, vh - 46, 190, 58, H("#4a2a1a", 0.82), 28)
+	local cp = ui.slice(root, "panel", 175, vh - 46, 190, 58, PILL, 28)
 	ui.box(cp, "coin", -70, 0, 54, 54)
 	ui.text(cp, tostring(progress.data.coins), 18, 1, 32)
-	round_button(root, vw - 60, vh - 46, 78, H("#8a7a70"), "icon_gear", nil, function() app.open_popup("settings") end)
+	round_button(root, vw - 60, vh - 46, 78, ui.PURPLE, "icon_gear", nil, function() app.open_popup("settings") end)
 
 	-- star chest widget
 	local cur_chest, goal_chest = progress.star_chest_progress()
@@ -63,7 +76,7 @@ function M.build(app, parent)
 	local ch_x = portrait and 175 or 390
 	local ch_y = portrait and (vh - 110) or (vh - 46)
 	local ch_w = portrait and 190 or 200
-	local chest_card = ui.slice(root, "panel", ch_x, ch_y, ch_w, 54, can_open_chest and H("#386641", 0.95) or H("#4a2a1a", 0.82), 26)
+	local chest_card = ui.slice(root, "panel", ch_x, ch_y, ch_w, 54, can_open_chest and H("#2fa57c", 0.95) or PILL, 26)
 	ui.icon(chest_card, "icon_chest", -ch_w / 2 + 32, 0, 42)
 	local ch_t = ui.text(chest_card, can_open_chest and i18n.get("OPEN") or (cur_chest .. "/" .. goal_chest), 18, 1, 26, can_open_chest and ui.WHITE or ui.GOLD)
 	ui.fit(ch_t, ch_w - 70, 26)
@@ -73,7 +86,7 @@ function M.build(app, parent)
 		end
 	end)
 	if can_open_chest then
-		local badge = ui.box(chest_card, "btn_round", ch_w / 2 - 10, 22, 34, 34, H("#e63946"))
+		local badge = ui.box(chest_card, "btn_round", ch_w / 2 - 10, 22, 34, 34, H("#ff4d6d"))
 		ui.text(badge, "!", 0, 2, 26)
 		ui.pulse(chest_card, 1.06, 0.5)
 	end
@@ -81,11 +94,29 @@ function M.build(app, parent)
 	-- chef's tasks widget (under the chest in portrait, next to it in landscape)
 	local mx = portrait and ch_x or (ch_x + ch_w + 20)
 	local my = portrait and (ch_y - 64) or ch_y
-	local tasks = ui.slice(root, "panel", mx, my, ch_w, 54, H("#4a2a1a", 0.82), 26)
+	local tasks = ui.slice(root, "panel", mx, my, ch_w, 54, PILL, 26)
 	ui.icon(tasks, "icon_tasks", -ch_w / 2 + 32, 0, 40, ui.GOLD)
 	local mt = ui.text(tasks, i18n.get("MISSIONS"), 18, 1, 24, ui.WHITE)
 	ui.fit(mt, ch_w - 70, 24)
 	ui.button(tasks, ch_w, 54, function() app.open_popup("missions") end)
+
+	-- session gift: opens after minutes of play (right column in portrait)
+	local gx = portrait and (vw - ch_x) or (mx + ch_w + 20)
+	local gy = ch_y
+	local ready = progress.gift_ready()
+	local left = math.ceil((progress.gift_state()))
+	local gcard = ui.slice(root, "panel", gx, gy, ch_w, 54, ready and H("#e0457b", 0.95) or PILL, 26)
+	local gi = ui.icon(gcard, "gift", -ch_w / 2 + 32, 3, 46)
+	local gt = ui.text(gcard, ready and i18n.get("OPEN") or string.format("%d:%02d", math.floor(left / 60), left % 60),
+		18, 1, 26, ready and ui.WHITE or ui.GOLD)
+	ui.fit(gt, ch_w - 70, 26)
+	ui.button(gcard, ch_w, 54, function()
+		if progress.gift_ready() then app.open_gift() else ui.shake(gi, 10) end
+	end)
+	if ready then
+		ui.pulse(gcard, 1.06, 0.5)
+		gui.animate(gi, "euler.z", 12, gui.EASING_INOUTSINE, 0.2, 0, nil, gui.PLAYBACK_LOOP_PINGPONG)
+	end
 
 	-- play
 	local py = portrait and 190 or 140
@@ -101,7 +132,7 @@ function M.build(app, parent)
 	-- win streak badge
 	if (progress.data.streak or 0) >= 2 then
 		local st_w = 230
-		local streak_badge = ui.slice(root, "panel", vw / 2, py + 86, st_w, 42, H("#e76f51", 0.95), 20)
+		local streak_badge = ui.slice(root, "panel", vw / 2, py + 86, st_w, 42, H("#ff7b5c", 0.95), 20)
 		ui.icon(streak_badge, "icon_fire", -st_w / 2 + 24, 0, 32)
 		local st_t = ui.text(streak_badge, i18n.get("WIN_STREAK") .. " x" .. progress.data.streak, 14, 1, 22, ui.WHITE)
 		ui.fit(st_t, st_w - 55, 22)
@@ -116,7 +147,7 @@ function M.build(app, parent)
 		app.open_popup("decor")
 	end, label_w)
 	if progress.can_decorate() then
-		local badge = ui.box(deco, "btn_round", 40, 40, 42, 42, H("#e63946"))
+		local badge = ui.box(deco, "btn_round", 40, 40, 42, 42, H("#ff4d6d"))
 		ui.text(badge, "!", 0, 2, 30)
 		ui.pulse(badge, 1.15, 0.5)
 	end

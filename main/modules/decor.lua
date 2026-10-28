@@ -9,6 +9,7 @@ M.MAX_TIER = 3
 M.ITEMS = {
 	{ id = "wall", icon = "icon_brush", prices = { 40, 150, 400 } },
 	{ id = "counter", icon = "coffee_machine", prices = { 60, 180, 450 } },
+	{ id = "flowers", icon = "vase", prices = { 90, 240, 520 } },
 	{ id = "lights", icon = "lamp", prices = { 80, 220, 500 } },
 	{ id = "plants", icon = "plant_small", prices = { 100, 260, 560 } },
 	{ id = "floor", icon = "table", prices = { 120, 300, 620 } },

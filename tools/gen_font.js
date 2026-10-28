@@ -1,14 +1,17 @@
 // Writes main/assets/fonts/main.font with every glyph the UI strings need.
 // usage (from the project root): node tools/gen_font.js
-// Covered: ASCII, Latin-1 (es/pt/de/fr), Turkish letters, Cyrillic (ru).
+// Glyphs: printable ASCII plus every other character used in main/modules/i18n.lua
+// (all 7 languages): a smaller glyph bank than whole Latin-1 / Cyrillic blocks.
+// Run it again after adding strings with new letters.
+// Font: Nunito Black (SIL OFL 1.1, main/assets/fonts/LICENSE-Nunito.txt), rounded and soft.
 const fs = require('fs');
 
 let chars = '';
 for (let c = 32; c < 127; c++) chars += String.fromCharCode(c);
-for (let c = 0xa1; c <= 0xff; c++) chars += String.fromCharCode(c);
-chars += 'ĞğİıŞşŒœ';
-for (let c = 0x410; c <= 0x44f; c++) chars += String.fromCharCode(c);
-chars += 'Ёё—–…№×';
+const used = new Set([...fs.readFileSync('main/modules/i18n.lua', 'utf8')].filter(ch => ch.codePointAt(0) > 126));
+// upper and lower case of every letter: names and future strings stay safe
+for (const ch of [...used]) { used.add(ch.toUpperCase()); used.add(ch.toLowerCase()); }
+chars += [...used].filter(ch => ch.length === 1 && ch.codePointAt(0) > 126).sort().join('');
 
 // protobuf text format: octal escapes for non-ASCII bytes, like the Defold editor writes
 const esc = [...Buffer.from(chars, 'utf8')].map(b => {
@@ -19,7 +22,7 @@ const esc = [...Buffer.from(chars, 'utf8')].map(b => {
 }).join('');
 
 const font = [
-  'font: "/main/assets/fonts/Roboto-Bold.ttf"',
+  'font: "/main/assets/fonts/Nunito-Black.ttf"',
   'material: "/builtins/fonts/font-df.material"',
   'size: 44',
   'outline_alpha: 1.0',

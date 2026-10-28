@@ -9,6 +9,8 @@
 --   * 7 tiles in the tray without a match = kitchen jam (second chance: 3 tiles go to the shelf);
 --   * orders are only made from unreserved triples, so every order can be served;
 --   * the level is won when board, tray and shelf are empty.
+--   * served triples in quick succession build a combo (extra coins per dish);
+--   * golden tiles pay extra coins, cloche tiles hide their dish until they are free.
 local config = require "main.modules.config"
 local levels = require "main.modules.levels"
 local board_mod = require "main.modules.board"
@@ -32,6 +34,18 @@ function M.new(level, opts)
 	local deal_rng = rng_mod.new(p.seed + 1)
 	local counts = levels.type_counts(p, #positions / 3, deal_rng)
 	board_mod.deal(b, board_mod.board_ids(b), counts, p.types, nil, p.open, deal_rng, false)
+	-- its own generator: golden and cloche tiles never change the layout or the deal
+	local extra_rng = rng_mod.new(p.seed * 7 + 5)
+	if level >= config.GOLD_MIN_LEVEL then
+		local ids = board_mod.board_ids(b)
+		extra_rng:shuffle(ids)
+		for k = 1, math.min(#ids, config.GOLD_TILES * (p.hard and 2 or 1)) do b.tiles[ids[k]].gold = true end
+	end
+	if level >= config.CLOCHE_MIN_LEVEL then
+		for _, t in ipairs(b.tiles) do
+			if t.blockers > 0 and extra_rng:float() < config.CLOCHE_SHARE then t.hidden = true end
+		end
+	end
 
 	local s = {
 		level = level,
@@ -60,6 +74,13 @@ function M.new(level, opts)
 		vips = 0,          -- VIP guests spawned this level
 		vip_served = 0,
 		food_done = {},    -- served triples per food (missions)
+		clock = 0,         -- level time while running (combo window)
+		combo = 0,
+		last_serve = -100,
+		best_combo = 0,
+		combo_coins = 0,
+		gold_found = 0,
+		gold_coins = 0,
 		mult = opts.mult or 1,
 		streak = opts.streak or 0,
 		total = #positions,
@@ -182,16 +203,33 @@ local function leave(s, seat, happy)
 	push(s, { e = "leave", seat = seat, happy = happy, coins = tip, kind = c.kind, vip = c.vip })
 end
 
-local function serve_item(s, seat, k, ids, rush)
+-- golden tiles among a leaving triple: extra coins
+local function pay_gold(s, ids)
+	local n = 0
+	for _, id in ipairs(ids) do
+		if s.board.tiles[id].gold then n = n + 1 end
+	end
+	if n == 0 then return 0 end
+	local coins = round(config.GOLD_COINS * n * s.mult)
+	s.coins = s.coins + coins
+	s.gold_found = s.gold_found + n
+	s.gold_coins = s.gold_coins + coins
+	return coins
+end
+
+local function serve_item(s, seat, k, ids, rush, gold)
 	local c = s.seats[seat]
 	local it = c.items[k]
 	it.done = true
 	s.reserved[it.type] = s.reserved[it.type] - 1
-	local pay = round(config.DISH_PRICE * s.mult * (c.vip and config.VIP_PAY or 1))
+	local bonus = rush and 0 or math.min(config.COMBO_COIN_MAX, math.max(0, s.combo - 1))
+	local pay = round(config.DISH_PRICE * s.mult * (c.vip and config.VIP_PAY or 1)) + bonus
 	s.coins = s.coins + pay
+	s.combo_coins = s.combo_coins + bonus
 	s.dishes = s.dishes + 1
 	s.food_done[it.type] = (s.food_done[it.type] or 0) + 1
-	push(s, { e = "serve", ids = ids, type = it.type, seat = seat, item = k, coins = pay, rush = rush })
+	push(s, { e = "serve", ids = ids, type = it.type, seat = seat, item = k, coins = pay, rush = rush,
+		combo = rush and 0 or s.combo, gold = gold or 0 })
 	for _, other in ipairs(c.items) do
 		if not other.done then return end
 	end
@@ -218,13 +256,37 @@ end
 
 local function resolve_triple(s, food, ids)
 	s.left[food] = s.left[food] - 3
+	local gold = pay_gold(s, ids)
 	local seat, k = most_urgent_seat(s, food)
 	if seat then
-		serve_item(s, seat, k, ids, false)
+		s.combo = s.clock - s.last_serve <= config.COMBO_WINDOW and s.combo + 1 or 1
+		s.last_serve = s.clock
+		s.best_combo = math.max(s.best_combo, s.combo)
+		serve_item(s, seat, k, ids, false, gold)
 	else
+		s.combo = 0
 		s.waste = s.waste + 1
-		push(s, { e = "waste", ids = ids, type = food })
+		push(s, { e = "waste", ids = ids, type = food, gold = gold })
 	end
+end
+
+-- seconds left in the combo window (0 = no running combo)
+function M.combo_left(s)
+	if s.combo < 1 then return 0 end
+	return math.max(0, config.COMBO_WINDOW - (s.clock - s.last_serve))
+end
+
+-- tiles that became free lose their cloche
+local function reveal(s, ids)
+	local shown = {}
+	for _, id in ipairs(ids) do
+		local t = s.board.tiles[id]
+		if t.hidden then
+			t.hidden = false
+			shown[#shown + 1] = id
+		end
+	end
+	if #shown > 0 then push(s, { e = "reveal", ids = shown }) end
 end
 
 -- ---------------------------------------------------------------- tray
@@ -290,7 +352,10 @@ function M.tap(s, id)
 			return false
 		end
 		local freed = board_mod.lift(s.board, id, "slot")
-		if #freed > 0 then push(s, { e = "free", ids = freed }) end
+		if #freed > 0 then
+			push(s, { e = "free", ids = freed })
+			reveal(s, freed)
+		end
 	elseif from == "shelf" then
 		remove_from(s.shelf, id)
 		push(s, { e = "shelf" })
@@ -406,7 +471,10 @@ function M.rush(s)
 				local t = s.board.tiles[id]
 				if t.where == "board" then
 					local freed = board_mod.lift(s.board, id, "gone")
-					if #freed > 0 then push(s, { e = "free", ids = freed }) end
+					if #freed > 0 then
+						push(s, { e = "free", ids = freed })
+						reveal(s, freed)
+					end
 				else
 					if t.where == "shelf" then shelf_changed = true end
 					remove_from(s.slot, id)
@@ -418,7 +486,7 @@ function M.rush(s)
 			s.left[it.type] = s.left[it.type] - 3
 			-- serve_item may free the seat after the last item
 			local still_here = s.seats[seat] == c
-			if still_here then serve_item(s, seat, k, ids, true) end
+			if still_here then serve_item(s, seat, k, ids, true, pay_gold(s, ids)) end
 		end
 	end
 	if shelf_changed then push(s, { e = "shelf" }) end
@@ -471,6 +539,7 @@ end
 
 function M.update(s, dt)
 	if s.status == "won" then return end
+	if s.running and s.status == "play" then s.clock = s.clock + dt end
 	for i = 1, config.SEATS do
 		local c = s.seats[i]
 		if c then
@@ -570,6 +639,8 @@ function M.result(s)
 		served = s.served,
 		vip_served = s.vip_served,
 		food_done = s.food_done,
+		gold_found = s.gold_found,
+		best_combo = s.best_combo,
 		hard = s.params.hard,
 	}
 end

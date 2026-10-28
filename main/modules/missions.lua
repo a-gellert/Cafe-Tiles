@@ -6,7 +6,7 @@ local levels = require "main.modules.levels"
 
 local M = {}
 
-M.KINDS = { "serve", "food", "levels", "stars3", "vip", "clean" }
+M.KINDS = { "serve", "food", "levels", "stars3", "vip", "clean", "gold" }
 local BOOSTERS = { "undo", "shuffle", "rush" }
 
 -- goals grow with the number of finished missions (tier = done / 3)
@@ -16,6 +16,7 @@ local function goal_for(kind, tier)
 	if kind == "levels" then return math.min(5, 2 + math.floor(tier / 2)) end
 	if kind == "stars3" then return math.min(3, 1 + math.floor(tier / 3)) end
 	if kind == "vip" then return math.min(3, 1 + math.floor(tier / 3)) end
+	if kind == "gold" then return math.min(12, 3 + tier) end
 	return math.min(2, 1 + math.floor(tier / 4)) -- clean: levels won without waste
 end
 
@@ -24,7 +25,10 @@ local function new_mission(state, level)
 	for _, m in ipairs(state.list) do used[m.kind] = true end
 	local cand = {}
 	for _, k in ipairs(M.KINDS) do
-		if not used[k] and (k ~= "vip" or level >= config.VIP_MIN_LEVEL) then cand[#cand + 1] = k end
+		if not used[k] and (k ~= "vip" or level >= config.VIP_MIN_LEVEL)
+			and (k ~= "gold" or level >= config.GOLD_MIN_LEVEL) then
+			cand[#cand + 1] = k
+		end
 	end
 	local kind = cand[math.random(#cand)]
 	local tier = math.floor(state.done / 3)
@@ -49,6 +53,7 @@ local function gain(m, r, live)
 	if m.kind == "serve" then return r.served or 0 end
 	if m.kind == "food" then return (r.food_done and r.food_done[m.food]) or 0 end
 	if m.kind == "vip" then return r.vip_served or 0 end
+	if m.kind == "gold" then return r.gold_found or 0 end
 	if live then return 0 end
 	if m.kind == "levels" then return 1 end
 	if m.kind == "stars3" then return r.stars == 3 and 1 or 0 end

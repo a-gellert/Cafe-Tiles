@@ -38,6 +38,27 @@ M.PAID_CHANCES = 2              -- "continue for coins" per level, on top of the
 M.CONTINUE_COST_BASE = 40       -- cost = base + per_level * level
 M.CONTINUE_COST_PER_LEVEL = 3
 
+-- Phase 3: depth and juice
+M.COMBO_WINDOW = 6.0            -- seconds between served triples that keep the combo going
+M.COMBO_COIN_MAX = 3            -- extra coins per served dish: combo - 1, capped
+M.GOLD_MIN_LEVEL = 4            -- golden tiles pay extra when they leave in a triple
+M.GOLD_TILES = 3                -- per level (x2 on hard levels)
+M.GOLD_COINS = 3                -- per golden tile (x decor multiplier)
+M.CLOCHE_MIN_LEVEL = 6          -- some covered dishes hide under a cloche until they are free
+M.CLOCHE_SHARE = 0.3            -- share of the initially covered tiles
+-- Session gifts: seconds of level play (this page session) for each gift, then every GIFT_REPEAT
+M.GIFT_TIMES = { 75, 200, 360, 540, 720, 900 }
+M.GIFT_REPEAT = 240
+M.GIFTS = {
+	{ coins = 25 },
+	{ coins = 20, booster = "rush" },
+	{ coins = 50 },
+	{ coins = 40, booster = "shuffle" },
+	{ coins = 80 },
+	{ coins = 60, booster = "undo" },
+}
+M.GIFT_LATER = { coins = 70 }
+
 -- Rewarded / boosters
 M.SECOND_CHANCES = 2            -- per level
 M.START_BOOSTERS = { undo = 3, shuffle = 2, rush = 1 }

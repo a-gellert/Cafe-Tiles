@@ -15,12 +15,16 @@ local M = {}
 local V3 = vmath.vector3
 local H = ui.hex
 
--- board geometry (board units)
+-- board geometry (board units). The tile sprite is 124x144 px with its baked shadow;
+-- the 104 px face sits 14 px above the sprite center.
 local STEP_X, STEP_Y = 48, 52   -- per half-cell
-local TILE_W, TILE_H = 100, 111
-local LIFT = 8                  -- upward shift per layer
-local ICON_DY = 7
-local ICON_SIZE = 74
+local K = 100 / 112             -- sprite px -> board units
+local TILE_W, TILE_H = 124 * K, 144 * K
+local FACE = 104 * K
+local FACE_DY = 14 * K
+local LIFT = 9                  -- upward shift per layer
+local ICON_DY = FACE_DY + 1
+local ICON_SIZE = 76
 -- tray / shelf / seats (their own units)
 local TRAY_STEP = 94
 local TRAY_SCALE = 0.86
@@ -29,8 +33,15 @@ local SHELF_SCALE = 0.72
 local SEAT_STEP = 230
 local BAR_W = 120
 
-local BG = H("#f3d9b8")
-local TABLE = H("#e9c49a")
+local BG_TOP = H("#ffd3e3")
+local BG_BOTTOM = H("#ffeadf")
+local TRAY = H("#f59ec0")
+local TRAY_WARN = H("#ffa05c")
+local TRAY_DANGER = H("#ff4d6d")
+local PILL = H("#6b2f5c", 0.85)
+local CLOCHE_DIM = vmath.vector4(0.9, 0.86, 0.95, 1)   -- a covered cloche stays bright and shiny
+
+local PRAISE_COLORS = { H("#ffd23f"), H("#ff8fc4"), H("#7fdcff"), H("#c9a4ff"), H("#7fe8b4") }
 
 local V = {}
 
@@ -54,6 +65,7 @@ local function regions(vw, vh, portrait)
 		local top = vh - 92 - cafe_h - 10
 		local bot = 374
 		R.board = { x = vw / 2, y = (top + bot) / 2, w = vw - 20, h = top - bot }
+		R.gift = { x = vw / 2 - 58, y = -96 }
 	else
 		local col = math.max(600, math.min(vw * 0.42, 760))
 		R.hud_y = vh - 40
@@ -66,6 +78,7 @@ local function regions(vw, vh, portrait)
 		R.tray = { x = rx, y = 82, s = math.min(1, rw / 700) }
 		R.shelf = { x = rx, y = 188, s = math.min(1, rw / 700) }
 		R.board = { x = rx, y = (vh - 92 + 238) / 2, w = rw, h = vh - 92 - 238 }
+		R.gift = { x = vw / 2 - 160, y = 0 }
 	end
 	return R
 end
@@ -75,11 +88,17 @@ local function tile_local(t)
 end
 
 local function tray_pos(i)
-	return V3((i - 4) * TRAY_STEP, 4, 0)
+	return V3((i - 4) * TRAY_STEP, -1, 0)
 end
 
 local function shelf_pos(i)
-	return V3((i - 4) * SHELF_STEP, 2, 0)
+	return V3((i - 4) * SHELF_STEP, -2, 0)
+end
+
+local function index_of(list, id)
+	for i, v in ipairs(list) do
+		if v == id then return i end
+	end
 end
 
 -- ---------------------------------------------------------------- tiles
@@ -93,15 +112,31 @@ local function set_tile_color(tv, free, animate)
 		gui.set_color(tv.root, c)
 		gui.set_color(tv.icon, c)
 	end
+	-- the cloche fades on its own when it lifts: never animate its colour
+	if tv.cloche then gui.set_color(tv.cloche, free and ui.WHITE or CLOCHE_DIM) end
 end
 
 local function make_tile(parent, t, pos, scale)
-	local root = ui.box(parent, "tile", pos.x, pos.y, TILE_W, TILE_H)
+	local root = ui.box(parent, t.gold and "tile_gold" or "tile", pos.x, pos.y, TILE_W, TILE_H)
 	gui.set_scale(root, V3(scale, scale, 1))
 	local icon = ui.box(root, food_sprite(t.type), 0, ICON_DY, ICON_SIZE, ICON_SIZE)
 	local tv = { root = root, icon = icon }
+	if t.hidden then tv.cloche = ui.box(root, "cloche", 0, FACE_DY + 3, 96, 89) end
+	if t.gold then
+		local tw = ui.glow(ui.box(root, "spark", 30, FACE_DY + 30, 30, 30, ui.WHITE))
+		gui.animate(tw, "scale", V3(1.6, 1.6, 1), gui.EASING_INOUTSINE, 0.45 + math.random() * 0.3, 0, nil, gui.PLAYBACK_LOOP_PINGPONG)
+		gui.animate(tw, "euler.z", 90, gui.EASING_LINEAR, 1.6, 0, nil, gui.PLAYBACK_LOOP_FORWARD)
+	end
 	V.tiles[t.id] = tv
 	return tv
+end
+
+-- a tile became free: a soft white flash and a little pop
+local function flash(tv)
+	local f = ui.glow(ui.box(tv.root, "tile_flash", 0, FACE_DY, FACE, FACE, vmath.vector4(1, 1, 1, 0.7)))
+	gui.animate(f, "color.w", 0, gui.EASING_OUTQUAD, 0.4, 0, function() gui.delete_node(f) end)
+	local s = gui.get_scale(tv.root).x
+	gui.animate(tv.root, "scale", V3(s * 1.07, s * 1.07, 1), gui.EASING_OUTSINE, 0.1, 0, nil, gui.PLAYBACK_ONCE_PINGPONG)
 end
 
 -- keeps the board draw order (lower layers first, back rows first) after undo
@@ -118,23 +153,29 @@ local function restore_order(id)
 	if best then gui.move_below(V.tiles[id].root, V.tiles[best].root) end
 end
 
+local function tray_color()
+	local n = #V.s.slot
+	return n >= config.SLOT_COUNT - 1 and TRAY_DANGER or (n >= config.SLOT_COUNT - 2 and TRAY_WARN or TRAY)
+end
+
 local function relayout_tray(delay)
 	for i, id in ipairs(V.s.slot) do
 		local tv = V.tiles[id]
-		if tv then
+		-- a tile still flying in finds its cell when it lands
+		if tv and not V.arriving[id] then
 			gui.animate(tv.root, "position", tray_pos(i), gui.EASING_OUTQUAD, 0.2, delay or 0)
 			gui.animate(tv.root, "scale", V3(TRAY_SCALE, TRAY_SCALE, 1), gui.EASING_OUTQUAD, 0.2)
 			set_tile_color(tv, true, false)
 		end
 	end
-	local n = #V.s.slot
-	gui.set_color(V.tray_bg, n >= config.SLOT_COUNT - 1 and H("#d9534f") or (n >= config.SLOT_COUNT - 2 and H("#e08a3c") or H("#b9784a")))
+	gui.set_color(V.tray_bg, tray_color())
 end
 
 local function relayout_shelf()
 	for i, id in ipairs(V.s.shelf) do
 		local tv = V.tiles[id]
 		if tv then
+			gui.cancel_animations(tv.root)
 			gui.animate(tv.root, "position", shelf_pos(i), gui.EASING_OUTQUAD, 0.25)
 			gui.animate(tv.root, "scale", V3(SHELF_SCALE, SHELF_SCALE, 1), gui.EASING_OUTQUAD, 0.25)
 			set_tile_color(tv, true, false)
@@ -152,7 +193,13 @@ end
 local function build_seat(i, c, appear)
 	local root = ui.pane(V.seats_pane, seat_x(i), 0)
 	local sv = { root = root, customer = c, items = {} }
+	if c.vip then
+		local g = ui.glow(ui.box(root, "glow", 0, 40, 230, 230, H("#ffd23f", 0.55)))
+		ui.pulse(g, 1.12, 0.8)
+	end
 	sv.avatar = ui.box(root, "cust_" .. config.CUSTOMERS[c.kind], 0, 30, 140, 140)
+	-- idle breathing
+	gui.animate(sv.avatar, "scale.y", 1.035, gui.EASING_INOUTSINE, 0.9 + math.random() * 0.4, math.random() * 0.5, nil, gui.PLAYBACK_LOOP_PINGPONG)
 	if c.vip then
 		local crown = ui.box(sv.avatar, "crown", 0, 74, 70, 52)
 		gui.set_euler(crown, V3(0, 0, -8))
@@ -174,7 +221,7 @@ local function build_seat(i, c, appear)
 	if c.patience_max > 0 then
 		local bar_w = math.min(BAR_W, bw - 30)
 		sv.bar_w = bar_w
-		ui.slice(sv.bubble, "bar", 0, -27, bar_w + 6, 14, H("#4a2a1a", 0.25), 6)
+		ui.slice(sv.bubble, "bar", 0, -27, bar_w + 6, 14, H("#6b2f5c", 0.22), 6)
 		sv.bar = ui.slice(sv.bubble, "bar", -bar_w / 2, -27, bar_w, 9, ui.GREEN, 4)
 		gui.set_pivot(sv.bar, gui.PIVOT_W)
 	end
@@ -193,13 +240,21 @@ local function update_patience()
 		if sv.bar and c.patience_max > 0 then
 			local f = math.max(0, c.patience / c.patience_max)
 			gui.set_size(sv.bar, V3(math.max(8, sv.bar_w * f), 9, 0))
-			gui.set_color(sv.bar, f > 0.5 and ui.GREEN or (f > 0.25 and ui.GOLD or H("#e63946")))
+			gui.set_color(sv.bar, f > 0.5 and ui.GREEN or (f > 0.25 and ui.GOLD or H("#ff4d6d")))
 			if f < 0.25 and not sv.worried then
 				sv.worried = true
 				gui.animate(sv.avatar, "position.x", 4, gui.EASING_INOUTSINE, 0.12, 0, nil, gui.PLAYBACK_LOOP_PINGPONG)
 			end
 		end
 	end
+end
+
+-- a happy little hop
+local function hop(sv)
+	gui.cancel_animations(sv.avatar, "position.y")
+	gui.animate(sv.avatar, "position.y", 52, gui.EASING_OUTQUAD, 0.13, 0, function()
+		gui.animate(sv.avatar, "position.y", 30, gui.EASING_OUTBOUNCE, 0.35)
+	end)
 end
 
 local function leave_seat(seat, happy)
@@ -212,8 +267,10 @@ local function leave_seat(seat, happy)
 		ui.pop(mood, 0.1, 1, 0.3)
 		gui.animate(mood, "position.y", 150, gui.EASING_OUTQUAD, 0.8)
 		gui.set_enabled(sv.bubble, false)
+		if happy then ui.hearts(sv.root, 0, 100, 4, 50) end
 		local p = gui.get_position(sv.root)
-		gui.animate(sv.root, "position", V3(p.x, -180, 0), gui.EASING_INBACK, 0.45, 0.5, function()
+		gui.animate(sv.root, "position", V3(p.x, -180, 0), gui.EASING_INBACK, 0.4, 0.35, function()
+			sv.deleted = true
 			gui.delete_node(sv.root)
 		end)
 		if not happy then
@@ -221,13 +278,26 @@ local function leave_seat(seat, happy)
 			ui.shake(sv.avatar, 12)
 		end
 	end
-	if happy then ui.after(0.55, go) else go() end
+	-- a happy guest waits for the last dish to land
+	if happy then ui.after(0.95, go) else go() end
 end
 
 -- ---------------------------------------------------------------- HUD / toasts
 
 local function coins_text()
 	gui.set_text(V.coins_label, tostring(V.coins_shown))
+end
+
+-- rolls the HUD counter up to the new value
+local function add_coins_shown(amount)
+	local from = V.coins_shown
+	V.coins_shown = V.coins_shown + amount
+	local steps = math.min(8, math.max(1, amount))
+	for k = 1, steps do
+		ui.after(k * 0.035, function()
+			gui.set_text(V.coins_label, tostring(math.floor(from + amount * k / steps + 0.5)))
+		end)
+	end
 end
 
 local function update_progress()
@@ -254,9 +324,9 @@ function M.toast(text, icon, dur)
 	local label = ui.text(p, text, icon and 24 or 0, 0, 30)
 	ui.fit(label, V.R.board.w - 140, 30)
 	local w = ui.text_width(label) * gui.get_scale(label).x + (icon and 110 or 60)
-	local bg = ui.slice(p, "panel", 0, 0, w, 64, H("#4a2a1a", 0.88), 28)
+	local bg = ui.slice(p, "panel", 0, 0, w, 64, PILL, 28)
 	gui.move_below(bg, label)
-	if icon then ui.box(p, icon, -w / 2 + 40, 0, 50, 50) end
+	if icon then ui.icon(p, icon, -w / 2 + 40, 0, 50) end
 	ui.pop(p, 0.6, 1, 0.25)
 	ui.after(dur or 2.2, function()
 		if V.toast == token then
@@ -266,10 +336,27 @@ function M.toast(text, icon, dur)
 	end)
 end
 
-local function tip_once(key, text)
+local function tip_once(key, text, icon)
 	if progress.tip_seen(key) then return end
 	progress.mark_tip(key)
-	M.toast(text)
+	M.toast(text, icon, 2.6)
+end
+
+-- big ribbon in the middle of the board (level start)
+local function banner(text, color)
+	local p = ui.pane(V.fx, V.R.board.x, V.R.board.y + 30)
+	local label = ui.text(p, text, 0, 6, 56)
+	ui.fit(label, V.R.board.w - 120, 56)
+	local w = math.min(V.R.board.w - 40, ui.text_width(label) * gui.get_scale(label).x + 120)
+	local rib = ui.slice(p, "btn", 0, 0, w, 112, color or ui.PINK, 34)
+	gui.move_below(rib, label)
+	ui.burst(p, -w / 2, 0, 5, nil, 60)
+	ui.burst(p, w / 2, 0, 5, nil, 60)
+	ui.pop(p, 0.3, 1, 0.35)
+	ui.after(1.15, function()
+		gui.animate(p, "position.y", V.R.board.y + 110, gui.EASING_INQUAD, 0.3)
+		gui.animate(p, "scale", V3(0.6, 0.6, 1), gui.EASING_INQUAD, 0.3, 0, function() gui.delete_node(p) end)
+	end)
 end
 
 local HINT_IDLE = 12
@@ -288,6 +375,78 @@ local function update_hand()
 	gui.set_position(V.hand, lp + V3(12, -50, 0))
 end
 
+-- ---------------------------------------------------------------- combo meter
+
+local function update_combo()
+	local s = V.s
+	local left = session.combo_left(s)
+	local show = s.combo >= 2 and left > 0 and s.status == "play"
+	if show ~= V.combo_shown then
+		V.combo_shown = show
+		gui.set_enabled(V.combo_pill, show)
+		if show then ui.pop(V.combo_pill, 0.5, 1, 0.25) end
+	end
+	if show then
+		if V.combo_value ~= s.combo then
+			V.combo_value = s.combo
+			gui.set_text(V.combo_text, "x" .. s.combo)
+			ui.pop(V.combo_text, 1.5, 1, 0.25)
+		end
+		gui.set_size(V.combo_fill, V3(math.max(8, 96 * left / config.COMBO_WINDOW), 10, 0))
+	end
+end
+
+-- ---------------------------------------------------------------- session gifts
+
+local function update_gift(force)
+	if not V.gift then return end
+	local left, f = progress.gift_state()
+	local ready = left <= 0
+	gui.set_fill_angle(V.gift.pie, -360 * f)
+	if ready ~= V.gift.ready or force then
+		V.gift.ready = ready
+		gui.set_enabled(V.gift.badge, ready)
+		gui.set_enabled(V.gift.rays, ready)
+		gui.cancel_animations(V.gift.icon, "scale")
+		gui.set_scale(V.gift.icon, V3(1, 1, 1))
+		if ready then
+			gui.animate(V.gift.icon, "scale", V3(1.18, 1.18, 1), gui.EASING_INOUTSINE, 0.35, 0, nil, gui.PLAYBACK_LOOP_PINGPONG)
+			if not force then
+				audio.play("star")
+				M.toast(i18n.get("GIFT_READY"), "gift", 2.4)
+			end
+		end
+	end
+end
+
+local function build_gift(parent, x, y)
+	local g = { root = ui.pane(parent, x, y) }
+	g.rays = ui.glow(ui.box(g.root, "rays", 0, 0, 170, 170, H("#ffe08a", 0.7)))
+	gui.animate(g.rays, "euler.z", -360, gui.EASING_LINEAR, 8, 0, nil, gui.PLAYBACK_LOOP_FORWARD)
+	local base = ui.box(g.root, "btn_round", 0, 0, 84, 84, ui.PLUM)
+	g.pie = gui.new_pie_node(V3(0, 4, 0), V3(76, 76, 0))
+	gui.set_parent(g.pie, g.root)
+	gui.set_inner_radius(g.pie, 30)
+	gui.set_outer_bounds(g.pie, gui.PIEBOUNDS_ELLIPSE)
+	gui.set_perimeter_vertices(g.pie, 48)
+	gui.set_euler(g.pie, V3(0, 0, 90))
+	gui.set_color(g.pie, ui.GOLD)
+	g.icon = ui.box(g.root, "gift", 0, 6, 58, 58)
+	g.badge = ui.box(g.root, "btn_round", 30, 30, 34, 34, H("#ff4d6d"))
+	ui.text(g.badge, "!", 0, 2, 26)
+	ui.button(base, 96, 96, function()
+		if progress.gift_ready() then
+			V.app.open_gift()
+		else
+			local left = math.ceil(progress.gift_state())
+			ui.shake(g.icon, 10)
+			M.toast(i18n.get("NEXT_GIFT", { t = string.format("%d:%02d", math.floor(left / 60), left % 60) }), "gift", 1.6)
+		end
+	end)
+	V.gift = g
+	update_gift(true)
+end
+
 -- ---------------------------------------------------------------- flights
 
 -- world position of a node expressed in the fx layer
@@ -295,65 +454,72 @@ local function fx_pos(node)
 	return ui.to_local(V.fx, (ui.world(node)))
 end
 
-local function fly_coins(from_node, amount)
-	local from = fx_pos(from_node)
+local function fly_coins(from, amount)
 	local to = fx_pos(V.coin_icon)
 	local n = math.min(6, math.max(2, math.floor(amount / 2)))
 	for k = 1, n do
-		local c = ui.box(V.fx, "coin", from.x + math.random(-20, 20), from.y + math.random(-10, 10), 40, 40)
+		local c = ui.box(V.fx, "coin", from.x + math.random(-24, 24), from.y + math.random(-12, 12), 42, 42)
+		ui.pop(c, 0.3, 1, 0.2)
 		local last = k == n
-		gui.animate(c, "position", to, gui.EASING_INQUAD, 0.45, 0.05 * k, function()
+		ui.fly(c, to, 0.5, 0.06 * k, function()
 			gui.delete_node(c)
-			audio.play("coin", 0.6)
+			audio.play("coin", 0.55, 0.95 + k * 0.03)
 			if last then
-				V.coins_shown = V.coins_shown + amount
-				coins_text()
-				ui.pop(V.coin_icon, 1.3, 1, 0.2)
+				add_coins_shown(amount)
+				ui.pop(V.coin_icon, 1.35, 1, 0.22)
+				ui.burst(V.coin_hud, -66, 0, 3, ui.GOLD, 40, 26)
 			end
 		end)
 	end
 end
 
--- three matched tiles merge, then a dish flies to `target_fn()` (fx-local point)
-local function merge_and_fly(ids, food, delay, target_node, on_arrive)
+-- three matched tiles merge, then a dish flies to `target_node`
+local function merge_and_fly(ids, food, delay, target_node, on_arrive, combo, gold)
 	local nodes = {}
 	for _, id in ipairs(ids) do
 		local tv = V.tiles[id]
 		V.tiles[id] = nil
+		V.arriving[id] = nil
 		if tv then nodes[#nodes + 1] = tv.root end
 	end
 	if #nodes == 0 then return end
 	ui.after(delay, function()
 		for _, n in ipairs(nodes) do
-			gui.cancel_animations(n, "position")
-			gui.cancel_animations(n, "scale")
+			gui.cancel_animations(n)
 			gui.set_parent(n, V.fx, true)
 		end
 		local mid = gui.get_position(nodes[math.min(2, #nodes)])
 		for _, n in ipairs(nodes) do
-			gui.animate(n, "position", mid, gui.EASING_INQUAD, 0.14)
-			gui.animate(n, "scale", V3(0.5, 0.5, 1), gui.EASING_INBACK, 0.2, 0.06, function() gui.delete_node(n) end)
+			gui.animate(n, "position", mid, gui.EASING_INBACK, 0.16)
+			gui.animate(n, "scale", V3(0.35, 0.35, 1), gui.EASING_INBACK, 0.2, 0.03, function() gui.delete_node(n) end)
 		end
 		ui.after(0.18, function()
-			V.combo = (V.combo or 0) + 1
-			V.combo_timer = 0
-			local pitch = math.min(1.35, 1.0 + (V.combo - 1) * 0.08)
+			local c = mid + V3(0, 12, 0)
+			local pitch = math.min(1.4, 1.0 + math.max(0, (combo or 1) - 1) * 0.07)
 			audio.play("match", 1.0, pitch)
-			ui.burst(V.fx, mid.x, mid.y, 7, ui.GOLD, 90)
-			if V.combo >= 2 then
-				local ct = ui.text(V.fx, i18n.get("COMBO") .. " x" .. V.combo .. "!", mid.x, mid.y + 35, 30, ui.GOLD)
-				ui.pop(ct, 0.2, 1.15, 0.15)
-				gui.animate(ct, "position.y", mid.y + 70, gui.EASING_OUTQUAD, 0.45)
-				gui.animate(ct, "color.w", 0, gui.EASING_INQUAD, 0.45, 0.12, function() gui.delete_node(ct) end)
+			ui.ring(V.fx, c.x, c.y, 230, ui.WHITE, 0.42)
+			ui.burst(V.fx, c.x, c.y, 10, nil, 120)
+			if combo and combo >= 2 then
+				local k = math.min(5, combo - 1)
+				local word = ui.float_text(V.fx, i18n.get("PRAISE_" .. k), c.x, c.y + 105, 46 + k * 4, PRAISE_COLORS[k], ui.INK, 80)
+				gui.set_euler(word, V3(0, 0, math.random(-6, 6)))
+				ui.hearts(V.fx, c.x, c.y + 20, math.min(5, combo), 60)
 			end
-			local dish = ui.box(V.fx, food_sprite(food), mid.x, mid.y, 84, 84)
-			ui.pop(dish, 0.4, 1.25, 0.15)
-			local to = fx_pos(target_node)
-			gui.animate(dish, "position", to, gui.EASING_INOUTQUAD, 0.42, 0.12)
-			gui.animate(dish, "scale", V3(0.6, 0.6, 1), gui.EASING_INQUAD, 0.42, 0.12, function()
+			if gold and gold > 0 then
+				audio.play("sparkle")
+				ui.burst(V.fx, c.x, c.y, 12, ui.GOLD, 150, 40)
+				ui.float_text(V.fx, "+" .. gold, c.x + 60, c.y - 10, 40, ui.GOLD, ui.INK, 60)
+				fly_coins(c, gold)
+			end
+			local dish = ui.box(V.fx, food_sprite(food), c.x, c.y, 88, 88)
+			gui.set_scale(dish, V3(0.4, 0.4, 1))
+			gui.animate(dish, "scale", V3(1.3, 1.3, 1), gui.EASING_OUTBACK, 0.16, 0, function()
+				gui.animate(dish, "scale", V3(0.62, 0.62, 1), gui.EASING_INQUAD, 0.4)
+			end)
+			ui.fly(dish, fx_pos(target_node), 0.42, 0.14, function()
 				gui.delete_node(dish)
 				on_arrive()
-			end)
+			end, ui.GOLD)
 		end)
 	end)
 end
@@ -365,17 +531,53 @@ local handlers = {}
 handlers.to_slot = function(e)
 	local tv = V.tiles[e.id]
 	if not tv then return end
+	gui.cancel_animations(tv.root)
 	gui.set_parent(tv.root, V.tray, true)
 	set_tile_color(tv, true, false)
-	gui.animate(tv.root, "position", tray_pos(e.index), gui.EASING_OUTQUAD, 0.2)
-	gui.animate(tv.root, "scale", V3(TRAY_SCALE, TRAY_SCALE, 1), gui.EASING_OUTQUAD, 0.2)
-	audio.play("tap")
+	local id, root = e.id, tv.root
+	local s = gui.get_scale(root).x
+	-- lift, fly along a curve, land with a squash
+	gui.animate(root, "scale", V3(s * 1.15, s * 1.15, 1), gui.EASING_OUTQUAD, 0.07, 0, function()
+		gui.animate(root, "scale", V3(TRAY_SCALE, TRAY_SCALE, 1), gui.EASING_INOUTQUAD, 0.2)
+	end)
+	V.arriving[id] = true
+	ui.fly(root, tray_pos(e.index), 0.26, 0.03, function()
+		V.arriving[id] = nil
+		local i = index_of(V.s.slot, id)
+		if i and i ~= e.index then gui.animate(root, "position", tray_pos(i), gui.EASING_OUTQUAD, 0.12) end
+		gui.animate(root, "scale", V3(TRAY_SCALE * 1.1, TRAY_SCALE * 0.88, 1), gui.EASING_OUTQUAD, 0.06, 0, function()
+			gui.animate(root, "scale", V3(TRAY_SCALE, TRAY_SCALE, 1), gui.EASING_OUTBACK, 0.2)
+		end)
+	end)
+	audio.play("tap", 0.9, 0.94 + #V.s.slot * 0.035)
 end
 
 handlers.free = function(e)
 	for _, id in ipairs(e.ids) do
-		if V.tiles[id] then set_tile_color(V.tiles[id], true, true) end
+		local tv = V.tiles[id]
+		if tv then
+			set_tile_color(tv, true, true)
+			flash(tv)
+		end
 	end
+end
+
+handlers.reveal = function(e)
+	for _, id in ipairs(e.ids) do
+		local tv = V.tiles[id]
+		if tv and tv.cloche then
+			local c = tv.cloche
+			tv.cloche = nil
+			gui.animate(c, "position.y", FACE_DY + 80, gui.EASING_OUTQUAD, 0.45)
+			gui.animate(c, "euler.z", math.random() < 0.5 and -20 or 20, gui.EASING_OUTQUAD, 0.45)
+			gui.animate(c, "color.w", 0, gui.EASING_INQUAD, 0.45, 0, function() gui.delete_node(c) end)
+			local p = gui.get_position(tv.root)
+			ui.burst(V.board, p.x, p.y + FACE_DY, 7, nil, 70, 30)
+			ui.pop(tv.icon, 0.5, 1, 0.3)
+		end
+	end
+	audio.play("reveal", 0.8)
+	tip_once("cloche", i18n.get("TIP_CLOCHE"), "cloche")
 end
 
 handlers.block = function(e)
@@ -388,16 +590,23 @@ handlers.slot = function()
 	relayout_tray(V.matched and 0.32 or 0)
 	update_progress()
 	local n = #V.s.slot
+	-- the tray pulses while it is nearly full
+	local pulsing = n >= 5 and V.s.status == "play"
+	if pulsing ~= V.tray_pulsing then
+		V.tray_pulsing = pulsing
+		gui.cancel_animations(V.tray, "scale")
+		gui.set_scale(V.tray, V3(V.R.tray.s, V.R.tray.s, 1))
+		if pulsing then ui.pulse(V.tray, 1.035, 0.25) end
+	end
 	if n >= 6 and V.s.status == "play" then
 		ui.shake(V.tray, 8)
-		gui.animate(V.tray_bg, "color", H("#e63946"), gui.EASING_OUTQUAD, 0.15)
+		gui.animate(V.tray_bg, "color", TRAY_DANGER, gui.EASING_OUTQUAD, 0.15)
 	elseif n == 5 and V.s.status == "play" then
-		ui.pulse(V.tray, 1.04, 0.25)
-		gui.animate(V.tray_bg, "color", H("#d9822b"), gui.EASING_OUTQUAD, 0.15)
+		gui.animate(V.tray_bg, "color", TRAY_WARN, gui.EASING_OUTQUAD, 0.15)
 	else
-		gui.animate(V.tray_bg, "color", H("#b9784a"), gui.EASING_OUTQUAD, 0.2)
+		gui.animate(V.tray_bg, "color", TRAY, gui.EASING_OUTQUAD, 0.2)
 		if V.last_slot_count and V.last_slot_count >= 5 and n <= 4 then
-			ui.burst(V.tray, 0, 0, 8, ui.GOLD, 100)
+			ui.burst(V.tray, 0, 0, 10, nil, 160)
 		end
 	end
 	V.last_slot_count = n
@@ -418,17 +627,21 @@ handlers.serve = function(e)
 	local item = sv.items[e.item]
 	local delay = e.rush and 0.05 or 0.2
 	merge_and_fly(e.ids, e.type, delay, item.icon, function()
+		-- the guest may have walked away (out of patience) while the dish was flying
+		if sv.deleted then return end
 		gui.set_enabled(item.check, true)
 		ui.pop(item.check, 0.2, 1, 0.3)
 		gui.set_color(item.icon, vmath.vector4(1, 1, 1, 0.45))
 		audio.play("serve")
-		ui.burst(V.fx, fx_pos(item.icon).x, fx_pos(item.icon).y, 6, ui.GOLD, 70)
-		gui.animate(sv.avatar, "position.y", 46, gui.EASING_OUTBACK, 0.18, 0, function()
-			gui.animate(sv.avatar, "position.y", 34, gui.EASING_INOUTSINE, 0.18)
-		end)
-		fly_coins(item.icon, e.coins)
+		local p = fx_pos(item.icon)
+		ui.burst(V.fx, p.x, p.y, 8, nil, 80)
+		local a = fx_pos(sv.avatar)
+		ui.hearts(V.fx, a.x, a.y + 30, 2, 36)
+		hop(sv)
+		fly_coins(p, e.coins)
 		V.app.mission_check()
-	end)
+	end, e.combo, e.gold)
+	if (e.combo or 0) >= 2 then tip_once("combo", i18n.get("TIP_COMBO"), "icon_fire") end
 	if V.tutorial and not V.tutorial_served then
 		V.tutorial_served = true
 		ui.after(1.0, function()
@@ -447,25 +660,26 @@ handlers.waste = function(e)
 		ui.shake(V.bin_icon, 14)
 		gui.set_text(V.bin_count, tostring(V.s.waste))
 		ui.pop(V.bin_count, 1.6, 1, 0.3)
-	end)
+	end, nil, e.gold)
 	tip_once("waste", i18n.get("TIP_WASTE"))
 end
 
 handlers.arrive = function(e)
 	if V.seats[e.seat] then leave_seat(e.seat, true) end
 	local sv = build_seat(e.seat, V.s.seats[e.seat], true)
-	audio.play("arrive", 0.7)
+	audio.play("arrive", 0.6)
 	if e.vip then
 		audio.play("star")
-		ui.after(0.45, function() ui.burst(sv.root, 0, 110, 10, ui.GOLD, 110) end)
-		tip_once("vip", i18n.get("VIP_TIP"))
+		ui.after(0.45, function() ui.burst(sv.root, 0, 110, 12, ui.GOLD, 120) end)
+		tip_once("vip", i18n.get("VIP_TIP"), "crown")
 	end
 end
 
 handlers.leave = function(e)
 	local sv = V.seats[e.seat]
 	if e.happy and sv and e.coins > 0 then
-		ui.after(0.5, function() fly_coins(sv.avatar, e.coins) end)
+		local avatar = sv.avatar
+		ui.after(0.9, function() fly_coins(fx_pos(avatar), e.coins) end)
 	end
 	if not e.happy then tip_once("angry", i18n.get("TIP_ANGRY")) end
 	leave_seat(e.seat, e.happy)
@@ -483,12 +697,14 @@ end
 handlers.undo = function(e)
 	local tv = V.tiles[e.id]
 	if not tv then return end
+	V.arriving[e.id] = nil
+	gui.cancel_animations(tv.root)
 	local t = V.s.board.tiles[e.id]
 	if e.to == "board" then
 		gui.set_parent(tv.root, V.board, true)
 		restore_order(e.id)
-		gui.animate(tv.root, "position", tile_local(t), gui.EASING_OUTQUAD, 0.25)
-		gui.animate(tv.root, "scale", V3(1, 1, 1), gui.EASING_OUTQUAD, 0.25)
+		ui.fly(tv.root, tile_local(t), 0.28)
+		gui.animate(tv.root, "scale", V3(1, 1, 1), gui.EASING_OUTBACK, 0.28)
 		set_tile_color(tv, t.blockers == 0, false)
 	else
 		gui.set_parent(tv.root, V.shelf, true)
@@ -505,21 +721,28 @@ handlers.shuffle = function(e)
 			local d = (k % 7) * 0.02
 			gui.animate(tv.root, "scale.x", 0.01, gui.EASING_INQUAD, 0.15, d, function()
 				gui.play_flipbook(tv.icon, food_sprite(t.type))
-				gui.animate(tv.root, "scale.x", 1, gui.EASING_OUTQUAD, 0.15)
+				gui.animate(tv.root, "scale.x", 1, gui.EASING_OUTBACK, 0.2)
 			end)
 		end
 	end
+	local bp = V.R.board
+	ui.burst(V.fx, bp.x, bp.y, 14, nil, math.min(bp.w, bp.h) * 0.45, 40)
 end
 
 handlers.to_shelf = function(e)
 	for _, id in ipairs(e.ids) do
 		local tv = V.tiles[id]
-		if tv then gui.set_parent(tv.root, V.shelf, true) end
+		if tv then
+			gui.set_parent(tv.root, V.shelf, true)
+			local p = gui.get_position(tv.root)
+			ui.burst(V.shelf, p.x, p.y, 4, nil, 50)
+		end
 	end
 	audio.play("booster")
 end
 
 handlers.won = function()
+	M.celebrate()
 	V.app.on_won_soon()
 end
 
@@ -544,6 +767,17 @@ end
 
 -- ---------------------------------------------------------------- build
 
+local function build_background(vw, vh)
+	ui.box(V.root, "square", vw / 2, vh / 2, vw, vh, BG_BOTTOM)
+	ui.box(V.root, "grad", vw / 2, vh * 0.62, vw, vh * 0.76, BG_TOP)
+	local cell = 168
+	local pat = H("#ffffff", 0.32)
+	for y = cell / 2, vh + cell / 2, cell do
+		for x = cell / 2, vw + cell / 2, cell do ui.box(V.root, "pat_hearts", x, y, cell, cell, pat) end
+	end
+	ui.ambient(ui.pane(V.root, 0, 0), vw, vh, 12)
+end
+
 local function build_board(R)
 	local s = V.s
 	local minx, maxx, miny, maxy, maxz = math.huge, -math.huge, math.huge, -math.huge, 0
@@ -559,8 +793,10 @@ local function build_board(R)
 	local scale = math.min(R.board.w / bw, R.board.h / bh, 1.3)
 	V.board_scale = scale
 
-	-- table cloth under the board
-	ui.slice(V.root, "panel", R.board.x, R.board.y, math.min(R.board.w + 10, bw * scale + 50), math.min(R.board.h + 10, bh * scale + 40), TABLE, 30)
+	-- tablecloth with a soft shadow under the board
+	local cw, ch = math.min(R.board.w + 10, bw * scale + 56), math.min(R.board.h + 10, bh * scale + 46)
+	ui.slice(V.root, "panel", R.board.x, R.board.y - 10, cw + 6, ch, H("#c2507e", 0.16), 30)
+	ui.slice(V.root, "cloth", R.board.x, R.board.y, cw, ch, ui.WHITE, 36)
 	V.board = ui.pane(V.root, R.board.x, R.board.y, scale)
 
 	local order = {}
@@ -586,7 +822,7 @@ local function booster_button(parent, kind, x, color, icon_name, label)
 	ui.icon(b, icon_name, 0, 4, 54)
 	local txt = ui.text(parent, i18n.get(label), x, -62, 22)
 	ui.fit(txt, 140, 22)
-	local badge = ui.box(b, "btn_round", 38, 38, 40, 40, H("#e63946"))
+	local badge = ui.box(b, "btn_round", 38, 38, 40, 40, H("#ff4d6d"))
 	local count = ui.text(badge, "0", 0, 2, 26)
 	local ad = ui.box(b, "btn_round", 38, 38, 44, 44, ui.GREEN)
 	ui.icon(ad, "icon_ad", 0, 2, 28)
@@ -595,7 +831,7 @@ local function booster_button(parent, kind, x, color, icon_name, label)
 end
 
 function M.build(app, parent)
-	V = { app = app, s = app.session, tiles = {}, seats = {}, boosters = {} }
+	V = { app = app, s = app.session, tiles = {}, seats = {}, boosters = {}, arriving = {} }
 	local s = V.s
 	local vw, vh = app.vw, app.vh
 	local portrait = app.orient == layout.PORTRAIT
@@ -603,12 +839,12 @@ function M.build(app, parent)
 	V.R = R
 	V.root = ui.pane(parent, 0, 0)
 
-	ui.box(V.root, "square", vw / 2, vh / 2, vw, vh, BG)
+	build_background(vw, vh)
 
 	-- cafe + customers
 	local cafe = ui.pane(V.root, R.cafe.x, R.cafe.y)
 	local cv = cafe_view.build(cafe, R.cafe.w, R.cafe.h, R.cafe.counter,
-		{ mode = R.cafe.mode, decor = progress.data.decor, counter_h = 66, seat_scale = R.seat_scale })
+		{ mode = R.cafe.mode, decor = progress.data.decor, counter_h = 66, seat_scale = R.seat_scale, animate = true })
 	V.seats_pane = cv.seats
 	gui.set_scale(V.seats_pane, V3(R.seat_scale, R.seat_scale, 1))
 	for i = 1, config.SEATS do
@@ -619,60 +855,73 @@ function M.build(app, parent)
 
 	-- shelf
 	V.shelf = ui.pane(V.root, R.shelf.x, R.shelf.y, R.shelf.s)
-	V.shelf_bg = ui.slice(V.shelf, "panel", 0, 0, 7 * SHELF_STEP + 20, 92, H("#4a2a1a", 0.16), 30)
+	V.shelf_bg = ui.slice(V.shelf, "panel", 0, 0, 7 * SHELF_STEP + 20, 96, H("#c2507e", 0.18), 30)
 	for i, id in ipairs(s.shelf) do make_tile(V.shelf, s.board.tiles[id], shelf_pos(i), SHELF_SCALE) end
 	gui.set_enabled(V.shelf_bg, #s.shelf > 0)
 
-	-- tray
+	-- tray: a pink 3D slab with inset cells
 	V.tray = ui.pane(V.root, R.tray.x, R.tray.y, R.tray.s)
-	V.tray_bg = ui.slice(V.tray, "frame", 0, 0, config.SLOT_COUNT * TRAY_STEP + 26, 124, H("#b9784a"), 30)
+	V.tray_bg = ui.slice(V.tray, "btn", 0, 0, config.SLOT_COUNT * TRAY_STEP + 30, 132, TRAY, 34)
 	for i = 1, config.SLOT_COUNT do
-		ui.slice(V.tray, "cell", (i - 4) * TRAY_STEP, 0, 86, 100, H("#f6e2c6"), 20)
+		ui.slice(V.tray, "cell", (i - 4) * TRAY_STEP, 4, 86, 100, H("#fff1f5"), 20)
 	end
 	for i, id in ipairs(s.slot) do make_tile(V.tray, s.board.tiles[id], tray_pos(i), TRAY_SCALE) end
 	relayout_tray(0)
+	-- combo meter on the tray corner
+	V.combo_pill = ui.pane(V.tray, -(config.SLOT_COUNT * TRAY_STEP) / 2 + 74, 78)
+	ui.slice(V.combo_pill, "panel", 0, 0, 150, 52, PILL, 24)
+	ui.icon(V.combo_pill, "icon_fire", -50, 2, 34, ui.PEACH)
+	V.combo_text = ui.text(V.combo_pill, "x2", 6, 9, 28, ui.GOLD)
+	ui.slice(V.combo_pill, "bar", 18, -12, 100, 12, H("#000000", 0.3), 5)
+	V.combo_fill = ui.slice(V.combo_pill, "bar", -30, -12, 96, 10, ui.PINK, 5)
+	gui.set_pivot(V.combo_fill, gui.PIVOT_W)
+	gui.set_enabled(V.combo_pill, false)
+	V.combo_shown = false
 
 	-- boosters + bin
 	local boost = ui.pane(V.root, R.boost.x, R.boost.y, R.boost.s)
 	V.bin_icon = ui.box(boost, "bin", -262, 12, 92, 92)
-	local pill = ui.slice(boost, "panel", -262, -50, 76, 38, H("#4a2a1a", 0.8), 18)
+	local pill = ui.slice(boost, "panel", -262, -50, 76, 38, PILL, 18)
 	V.bin_count = ui.text(pill, tostring(s.waste), 0, 1, 28)
 	booster_button(boost, "undo", -88, ui.BLUE, "icon_undo", "UNDO")
 	booster_button(boost, "shuffle", 72, ui.PURPLE, "icon_shuffle", "SHUFFLE")
-	booster_button(boost, "rush", 232, ui.ORANGE, "icon_bolt", "RUSH")
+	booster_button(boost, "rush", 232, ui.PEACH, "icon_bolt", "RUSH")
 	update_boosters()
 
 	-- HUD
 	local hud = ui.pane(V.root, vw / 2, R.hud_y)
 	local half = vw / 2
 	-- coins left (clear of the Poki pill), level between coins and pause
-	local cp = ui.slice(hud, "panel", -half + 140, 0, 180, 58, H("#4a2a1a", 0.82), 28)
+	local cp = ui.slice(hud, "panel", -half + 140, 0, 180, 58, PILL, 28)
+	V.coin_hud = cp
 	V.coin_icon = ui.box(cp, "coin", -66, 0, 54, 54)
 	V.coins_shown = progress.data.coins + s.coins
 	V.coins_label = ui.text(cp, "", 18, 1, 32)
 	coins_text()
 	local lx = portrait and ((-half + 230) + (half - 100)) / 2 or 0
-	local lp = ui.slice(hud, "panel", lx, 0, 250, 66, s.params.hard and H("#9b2226", 0.9) or H("#4a2a1a", 0.82), 30)
+	local lp = ui.slice(hud, "panel", lx, 0, 250, 66, s.params.hard and H("#c2304f", 0.92) or PILL, 30)
 	local lt = ui.text(lp, i18n.get("LEVEL", { n = s.level }), 0, 10, 30)
 	ui.fit(lt, 230, 30)
-	ui.slice(lp, "bar", 0, -18, 216, 16, H("#000000", 0.35), 6)
-	V.progress_fill = ui.slice(lp, "bar", -105, -18, 10, 12, ui.GOLD, 5)
+	ui.slice(lp, "bar", 0, -18, 216, 16, H("#000000", 0.3), 6)
+	V.progress_fill = ui.slice(lp, "bar", -105, -18, 10, 12, ui.PINK, 5)
 	gui.set_pivot(V.progress_fill, gui.PIVOT_W)
 	update_progress()
 	if (progress.data.streak or 0) >= 2 then
-		local st_badge = ui.box(lp, "btn_round", 116, 22, 38, 38, H("#e76f51"))
+		local st_badge = ui.box(lp, "btn_round", 116, 22, 38, 38, H("#ff7b5c"))
 		ui.icon(st_badge, "icon_fire", 0, 1, 24)
 		ui.pulse(st_badge, 1.1, 0.6)
 	end
-	local pause = ui.box(hud, "btn_round", half - 60, 0, 78, 78, ui.ORANGE)
+	local pause = ui.box(hud, "btn_round", half - 60, 0, 78, 78, ui.PURPLE)
 	ui.icon(pause, "icon_pause", 0, 3, 40)
 	ui.button(pause, 90, 90, function() V.app.pause() end)
+	build_gift(hud, R.gift.x, R.gift.y)
 
 	-- fx layer on top
 	V.fx = ui.pane(V.root, 0, 0)
 	-- pointing hand: tutorial on level 1, idle hint afterwards
 	V.tutorial = s.level == 1 and not progress.tip_seen("tutorial")
 	V.idle = 0
+	V.gift_t = 0
 	V.hand = ui.box(V.fx, "hand", 0, 0, 96, 96)
 	ui.pulse(V.hand, 1.12, 0.5)
 	if V.tutorial and not s.running then M.toast(i18n.get("TUT_1"), nil, 4) end
@@ -680,15 +929,34 @@ function M.build(app, parent)
 end
 
 function M.intro()
-	local food = levels.new_food(V.s.level)
-	local delay = 0
+	local s = V.s
+	if not V.tutorial then banner(i18n.get("LEVEL", { n = s.level }), s.params.hard and H("#ff5d73") or ui.PINK) end
+	local food = levels.new_food(s.level)
+	local delay = 1.5
 	if food and not V.tutorial then
-		M.toast(i18n.get("NEW_DISH"), food_sprite(food), 2.4)
-		delay = 2.6
+		ui.after(delay, function() M.toast(i18n.get("NEW_DISH"), food_sprite(food), 2.4) end)
+		delay = delay + 2.6
 	end
-	if V.s.params.hard then
+	if s.params.hard then
 		ui.after(delay, function() M.toast(i18n.get("HARD_LEVEL"), "icon_fire", 2.6) end)
+		delay = delay + 2.8
 	end
+	-- first golden tiles: explain once
+	if s.level >= config.GOLD_MIN_LEVEL and not progress.tip_seen("gold") then
+		ui.after(delay, function() tip_once("gold", i18n.get("TIP_GOLD"), "coin") end)
+	end
+end
+
+-- level cleared: confetti and sparkles over the table
+function M.celebrate()
+	local R = V.R
+	ui.confetti(V.fx, V.app.vw, V.app.vh, 46)
+	for k = 1, 4 do
+		ui.after(0.12 * k, function()
+			ui.burst(V.fx, R.board.x + math.random(-1, 1) * R.board.w * 0.3, R.board.y + math.random(-1, 1) * R.board.h * 0.25, 10, nil, 140, 40)
+		end)
+	end
+	ui.ring(V.fx, R.board.x, R.board.y, math.min(R.board.w, R.board.h), ui.WHITE, 0.6)
 end
 
 -- coins paid from the HUD total (continue for coins)
@@ -698,14 +966,22 @@ function M.spend_coins(n)
 	ui.shake(V.coin_icon, 10)
 end
 
+-- a gift was claimed while the level is on screen
+function M.refresh_gift()
+	V.coins_shown = progress.data.coins + V.s.coins
+	coins_text()
+	update_boosters()
+	update_gift(true)
+end
+
 function M.update(dt)
 	if not V.s then return end
 	update_patience()
-	if V.combo and V.combo > 0 then
-		V.combo_timer = (V.combo_timer or 0) + dt
-		if V.combo_timer > 2.5 then
-			V.combo = 0
-		end
+	update_combo()
+	V.gift_t = V.gift_t + dt
+	if V.gift_t > 0.25 then
+		V.gift_t = 0
+		update_gift(false)
 	end
 	if V.s.status == "play" and not V.tutorial then
 		local before = V.idle
@@ -727,11 +1003,11 @@ end
 -- returns the tile id under a scene point (top-most), and whether it is takeable
 function M.tile_at(x, y)
 	local s = V.s
-	for i, id in ipairs(s.shelf) do
+	for _, id in ipairs(s.shelf) do
 		local tv = V.tiles[id]
 		if tv then
 			local p, sc = ui.world(tv.root)
-			if math.abs(x - p.x) <= TILE_W * sc / 2 and math.abs(y - p.y) <= TILE_H * sc / 2 then
+			if math.abs(x - p.x) <= TILE_W * sc / 2 and math.abs(y - p.y - FACE_DY * sc) <= FACE * sc / 2 + 6 then
 				return id
 			end
 		end
@@ -740,7 +1016,7 @@ function M.tile_at(x, y)
 	for _, t in ipairs(V.hit_order) do
 		if t.where == "board" then
 			local l = tile_local(t)
-			local cx, cy = bp.x + l.x * bs, bp.y + (l.y + ICON_DY) * bs
+			local cx, cy = bp.x + l.x * bs, bp.y + (l.y + FACE_DY) * bs
 			if math.abs(x - cx) <= STEP_X * bs and math.abs(y - cy) <= STEP_Y * bs then
 				return t.id
 			end

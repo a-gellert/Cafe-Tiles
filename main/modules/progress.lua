@@ -129,6 +129,40 @@ function M.finish_level(level, stars, coins)
 	M.save()
 end
 
+-- ---------------------------------------------------------------- session gifts
+-- Gifts for minutes of level play in this page session (not saved: the track restarts
+-- with every visit). Time is added by the controller only while a level is running.
+M.play_time = 0
+M.gifts_taken = 0
+
+function M.gift_time(i)
+	local times = config.GIFT_TIMES
+	if i <= #times then return times[i] end
+	return times[#times] + (i - #times) * config.GIFT_REPEAT
+end
+
+-- seconds of play left to the next gift (0 = ready), and the progress 0..1
+function M.gift_state()
+	local i = M.gifts_taken + 1
+	local at, from = M.gift_time(i), i > 1 and M.gift_time(i - 1) or 0
+	local left = math.max(0, at - M.play_time)
+	return left, math.min(1, (M.play_time - from) / (at - from))
+end
+
+function M.gift_ready()
+	return (M.gift_state()) <= 0
+end
+
+function M.claim_gift()
+	if not M.gift_ready() then return nil end
+	M.gifts_taken = M.gifts_taken + 1
+	local g = config.GIFTS[M.gifts_taken] or config.GIFT_LATER
+	M.add_coins(g.coins or 0)
+	if g.booster then M.data.boosters[g.booster] = (M.data.boosters[g.booster] or 0) + 1 end
+	M.save()
+	return { coins = g.coins or 0, booster = g.booster, gift = true }
+end
+
 -- one-time tips
 function M.tip_seen(key)
 	return M.data.tips[key] == true

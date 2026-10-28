@@ -11,24 +11,24 @@ local H = ui.hex
 
 -- [tier] = wall color, pattern sprite, pattern color, awning color
 local WALL = {
-	[0] = { "#f6e3c9", "pat_stripes", "#f0d6b4", "#e07a5f" },
-	[1] = { "#cdeccf", "pat_stripes", "#b6e2ba", "#3fa38a" },
-	[2] = { "#ffdde3", "pat_dots", "#ffc3cf", "#ef6f8e" },
-	[3] = { "#e6dbff", "pat_diamond", "#d2c2ff", "#8c6cf0" },
+	[0] = { "#fde7e3", "pat_stripes", "#f8d7d3", "#f58aa6" },
+	[1] = { "#d9f3e7", "pat_stripes", "#c4ead8", "#43b892" },
+	[2] = { "#ffdfea", "pat_dots", "#ffc8da", "#ef6f9a" },
+	[3] = { "#ebe0fe", "pat_diamond", "#d9c8ff", "#9a7cf0" },
 }
 -- [tier] = front color, top plank color, panel line color
 local COUNTER = {
-	[0] = { "#c98a52", "#8a5228", "#ad6f3c" },
-	[1] = { "#f4efe6", "#b8a690", "#ded5c6" },
-	[2] = { "#8fd6c1", "#f6f1e7", "#73bfa9" },
-	[3] = { "#ff9fb5", "#ffd36b", "#f0839c" },
+	[0] = { "#e2a68a", "#a7664c", "#d1937a" },
+	[1] = { "#fbf5ef", "#c9b4a5", "#ece0d6" },
+	[2] = { "#a4e3cf", "#fbf5ef", "#86d0b9" },
+	[3] = { "#ffb0c4", "#ffd36b", "#f293ad" },
 }
 -- [tier] = floor color, pattern sprite, pattern color
 local FLOOR = {
-	[0] = { "#d9b48a", nil, nil },
-	[1] = { "#e9e2d6", "pat_checker", "#ffffff" },
-	[2] = { "#d8a46e", "pat_planks", "#ecc08e" },
-	[3] = { "#f6d3da", "pat_checker", "#ffffff" },
+	[0] = { "#ecc9b6", nil, nil },
+	[1] = { "#f3ebe4", "pat_checker", "#ffffff" },
+	[2] = { "#e2b190", "pat_planks", "#f0c9a8" },
+	[3] = { "#fbd9e2", "pat_checker", "#ffffff" },
 }
 
 local function tiled(parent, sprite, cx, cy, w, h, cell, color)
@@ -52,6 +52,7 @@ function M.build(parent, w, h, counter_y, opts)
 	local t_plants = decor.tier(owned, "plants")
 	local t_floor = decor.tier(owned, "floor")
 	local t_kitchen = decor.tier(owned, "kitchen")
+	local t_flowers = decor.tier(owned, "flowers")
 	local full = opts.mode == "full"
 	local top, bottom = h / 2, -h / 2
 	local counter_h = opts.counter_h or 70
@@ -72,14 +73,15 @@ function M.build(parent, w, h, counter_y, opts)
 
 	-- windows and wall decor
 	local wy = math.min(counter_y + (full and 175 or 150), top - 120)
-	if full then
-		ui.icon(root, "window", -w * 0.28, wy, 220)
-		ui.icon(root, "window", w * 0.06, wy, 220)
-		if t_kitchen >= 1 then ui.icon(root, "menu_board", w * 0.32, wy + 10, 170) end
-	else
-		ui.icon(root, "window", -w * 0.16, wy + 10, 170)
-		ui.icon(root, "window", w * 0.16, wy + 10, 170)
-		if t_kitchen >= 1 then ui.icon(root, "menu_board", w * 0.5 - 70, wy + 20, 110) end
+	local windows = full and { { -w * 0.28, wy, 220 }, { w * 0.06, wy, 220 } }
+		or { { -w * 0.16, wy + 10, 170 }, { w * 0.16, wy + 10, 170 } }
+	for _, wnd in ipairs(windows) do
+		ui.icon(root, "window", wnd[1], wnd[2], wnd[3])
+		-- flower boxes under the windows
+		if t_flowers >= 2 then ui.icon(root, "flower_box", wnd[1], wnd[2] - wnd[3] * 0.47, wnd[3] * 0.92) end
+	end
+	if t_kitchen >= 1 then
+		if full then ui.icon(root, "menu_board", w * 0.32, wy + 10, 170) else ui.icon(root, "menu_board", w * 0.5 - 70, wy + 20, 110) end
 	end
 	if t_plants >= 3 then
 		ui.icon(root, "plant_hang", -w / 2 + 70, top - 120, 130)
@@ -101,10 +103,17 @@ function M.build(parent, w, h, counter_y, opts)
 	for i = 0, n - 1 do
 		ui.box(root, "awning", -n * seg / 2 + seg / 2 + i * seg, top - 26, seg + 1, 64, H(wall[4]))
 	end
+	local gn = math.ceil(w / 256) + 1
+	if t_flowers >= 3 then
+		for i = 0, gn - 1 do ui.box(root, "flower_garland", -gn * 128 + 128 + i * 256, top - 66, 256, 64) end
+	end
 	if t_lights >= 3 then
-		local gn = math.ceil(w / 256) + 1
+		local gy = t_flowers >= 3 and top - 98 or top - 80
 		for i = 0, gn - 1 do
-			ui.box(root, "garland", -gn * 128 + 128 + i * 256, top - 80, 256, 64)
+			local g = ui.box(root, "garland", -gn * 128 + 128 + i * 256, gy, 256, 64)
+			if opts.animate then
+				gui.animate(g, "color.w", 0.75, gui.EASING_INOUTSINE, 0.8 + i * 0.13, 0, nil, gui.PLAYBACK_LOOP_PINGPONG)
+			end
 		end
 	end
 
@@ -148,11 +157,15 @@ function M.build(parent, w, h, counter_y, opts)
 	end
 	if t_kitchen >= 2 then ui.icon(root, "cake_display", full and w * 0.36 or w / 2 - 62, ty + 40, full and 150 or 112) end
 	if t_kitchen >= 3 and full then ui.icon(root, "cake_display", w * 0.18, ty + 40, 130) end
-	-- strip mode: plants go into the gaps between the customers
+	-- strip mode: plants and flowers go into the gaps between the customers
 	if t_plants >= 1 then
 		ui.icon(root, "plant_small", full and -w * 0.2 or -105 * opts.seat_scale, ty + 30, full and 90 or 64)
 	end
-	if t_plants >= 2 and not full then ui.icon(root, "plant_small", 105 * opts.seat_scale, ty + 30, 64) end
+	if t_flowers >= 1 then
+		ui.icon(root, "vase", full and w * 0.1 or 105 * opts.seat_scale, ty + (full and 40 or 32), full and 104 or 74)
+	elseif t_plants >= 2 and not full then
+		ui.icon(root, "plant_small", 105 * opts.seat_scale, ty + 30, 64)
+	end
 
 	return { root = root, seats = seats }
 end

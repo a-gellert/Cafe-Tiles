@@ -1,7 +1,7 @@
 # Project Architecture & Guidelines
 
 ## Core Principles
-1. **Target platform**: Poki (wasm-web). Small download (release zip ≈2.5 MB), instant start, portrait (mobile) and landscape (desktop).
+1. **Target platform**: Poki (wasm-web). Small download (release zip ≈1.4 MB), instant start, portrait (mobile) and landscape (desktop).
 2. **GUI only**: there are no game objects with sprites. Everything is drawn by one GUI component (`main/gui/game.gui`) whose nodes are created from code. The `.gui` file only declares the atlas (`game`) and the font (`main`); `adjust_reference` is `ADJUST_REFERENCE_DISABLED`.
 3. **Virtual canvas**: `main/modules/layout.lua` maps the window to 720x1280 (portrait, aspect < 0.9) or 1600x900 (landscape) virtual units. The render script uses the same module for the GUI projection. Input: `x = action.x / display.width * vw`.
 4. **Logic in pure Lua**: `session.lua`, `board.lua`, `levels.lua`, `rng.lua`, `config.lua` use no Defold API and run in `tools/sim.lua` (LuaJIT). Views never change game state directly; they call session functions and animate `s.events`.
@@ -18,8 +18,9 @@
 ## Directory Structure
 - `main/modules/` game rules, economy, save, SDK wrappers.
 - `main/gui/` views (`game_view`, `menu_view`, `cafe_view`, `popups`), helpers (`ui.lua`), generated `sprite_sizes.lua`.
-- `main/assets/` generated PNGs + `game.atlas`, WAV sounds, Roboto font.
+- `main/assets/` generated PNGs + `game.atlas`, OGG/WAV sounds (`main/sounds.go` is generated too), Nunito Black font.
+- `main/game.appmanifest` trims the HTML5 engine (no physics, particles, profiler, Basis, ...). Do not use an excluded engine feature without editing it.
 - `tools/` asset generators, `sim.lua`, `web_smoke.js`, build scripts.
 
 ## Mandatory Rule for Agents
-Before changing the code read this file and [docs/KNOWLEDGE_BASE.md](docs/KNOWLEDGE_BASE.md). Balance changes go through `tools/sim.lua`. Record every gameplay, balance, UI or monetization change in the knowledge base change log. Regenerate assets with the tools instead of editing generated files (`game.atlas`, `sprite_sizes.lua`, `main.font`, PNG/WAV).
+Before changing the code read this file and [docs/KNOWLEDGE_BASE.md](docs/KNOWLEDGE_BASE.md). Balance changes go through `tools/sim.lua`. Record every gameplay, balance, UI or monetization change in the knowledge base change log. Regenerate assets with the tools instead of editing generated files (`game.atlas`, `sprite_sizes.lua`, `main.font`, `sounds.go`, PNG/OGG/WAV).

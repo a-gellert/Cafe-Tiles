@@ -16,17 +16,24 @@ function M.hex(s, a)
 	return vmath.vector4(math.floor(v / 65536) / 255, math.floor(v / 256) % 256 / 255, v % 256 / 255, a or 1)
 end
 
+-- pastel cafe palette
 M.WHITE = vmath.vector4(1, 1, 1, 1)
-M.INK = M.hex("#4a2a1a")
-M.CREAM = M.hex("#fff6e5")
-M.ORANGE = M.hex("#ff8a3d")
-M.GREEN = M.hex("#3fbf6a")
-M.BLUE = M.hex("#3a9dff")
-M.PINK = M.hex("#ff6f91")
-M.PURPLE = M.hex("#9b6cff")
+M.INK = M.hex("#5a2a45")       -- plum: text outlines and dark text
+M.PLUM = M.hex("#6b2f5c")      -- HUD pills (with alpha)
+M.CREAM = M.hex("#fff7f2")
+M.ORANGE = M.hex("#ff7b93")    -- main call to action (coral pink)
+M.PEACH = M.hex("#ffa05c")
+M.GREEN = M.hex("#35c493")
+M.BLUE = M.hex("#5aaeff")
+M.PINK = M.hex("#ff6fa8")
+M.ROSE = M.hex("#ffb3cb")
+M.PURPLE = M.hex("#a27bff")
+M.MINT = M.hex("#7fe3c4")
 M.GOLD = M.hex("#ffd23f")
-M.GREY = M.hex("#9a8f86")
-M.DIM = vmath.vector4(0.62, 0.6, 0.66, 1)
+M.GREY = M.hex("#b3a2ad")
+M.DIM = vmath.vector4(0.72, 0.65, 0.76, 1)
+-- sparkle colours for bursts
+M.CANDY = { M.hex("#ffd23f"), M.hex("#ff8fbf"), M.hex("#ffffff"), M.hex("#9fe8ff"), M.hex("#c7a8ff"), M.hex("#a8f0c8") }
 
 -- generation counter: delayed callbacks from a torn-down screen are dropped
 M.gen = 0
@@ -209,21 +216,112 @@ function M.shake(n, amount)
 	gui.animate(n, "euler.z", 0, gui.EASING_OUTELASTIC, 0.5)
 end
 
--- Sparkle burst at a point of `parent`
+-- additive blending: glows and sparkles light up what is under them
+function M.glow(n)
+	gui.set_blend_mode(n, gui.BLEND_ADD)
+	return n
+end
+
+local function candy()
+	return M.CANDY[math.random(#M.CANDY)]
+end
+
+-- Sparkle burst at a point of `parent`. color = nil: mixed candy colours.
 function M.burst(parent, x, y, count, color, spread, size)
 	for _ = 1, count do
-		local n = M.box(parent, "spark", x, y, size or 34, size or 34, color or M.GOLD)
+		local s = (size or 34) * (0.7 + math.random() * 0.6)
+		local n = M.glow(M.box(parent, "spark", x, y, s, s, color or candy()))
 		local a = math.random() * math.pi * 2
 		local d = (spread or 80) * (0.45 + math.random() * 0.55)
-		local dur = 0.35 + math.random() * 0.25
-		gui.animate(n, "position", V3(x + math.cos(a) * d, y + math.sin(a) * d, 0), gui.EASING_OUTQUAD, dur)
+		local dur = 0.35 + math.random() * 0.3
+		gui.set_euler(n, V3(0, 0, math.random(0, 90)))
+		gui.animate(n, "position", V3(x + math.cos(a) * d, y + math.sin(a) * d, 0), gui.EASING_OUTCUBIC, dur)
+		gui.animate(n, "euler.z", math.random(-120, 120), gui.EASING_OUTQUAD, dur)
 		gui.animate(n, "color.w", 0, gui.EASING_INQUAD, dur, 0, function() gui.delete_node(n) end)
 	end
 end
 
--- Moves a node to `to` (local to its parent) along an arc, then calls done.
-function M.fly(n, to, dur, delay, done, easing)
-	gui.animate(n, "position", to, easing or gui.EASING_INOUTQUAD, dur, delay or 0, done and function() done() end or nil)
+-- Expanding soft ring (shockwave)
+function M.ring(parent, x, y, size, color, dur)
+	local n = M.glow(M.box(parent, "ring", x, y, size * 0.3, size * 0.3, color or M.WHITE))
+	gui.animate(n, "size", V3(size, size, 0), gui.EASING_OUTCUBIC, dur or 0.4)
+	gui.animate(n, "color.w", 0, gui.EASING_INQUAD, dur or 0.4, 0, function() gui.delete_node(n) end)
+end
+
+-- Little hearts floating up and fading
+function M.hearts(parent, x, y, count, spread)
+	for k = 1, count do
+		local s = 26 + math.random() * 18
+		local n = M.box(parent, "heart_w", x + math.random(-spread, spread), y, s, s,
+			k % 2 == 0 and M.hex("#ff8fbf") or M.hex("#ff6f9f"))
+		local dur = 0.8 + math.random() * 0.4
+		local d = 0.05 * k
+		gui.set_scale(n, V3(0.2, 0.2, 1))
+		gui.animate(n, "scale", V3(1, 1, 1), gui.EASING_OUTBACK, 0.25, d)
+		gui.animate(n, "position.y", y + 90 + math.random() * 50, gui.EASING_OUTQUAD, dur, d)
+		gui.animate(n, "position.x", x + math.random(-spread, spread) * 1.4, gui.EASING_INOUTSINE, dur, d)
+		gui.animate(n, "color.w", 0, gui.EASING_INQUAD, dur * 0.6, d + dur * 0.4, function() gui.delete_node(n) end)
+	end
+end
+
+-- Text that pops, rises and fades (praise words, +coins)
+function M.float_text(parent, str, x, y, size, color, outline, rise)
+	local n = M.text(parent, str, x, y, size, color, outline)
+	M.pop(n, 0.3, 1, 0.3)
+	gui.animate(n, "position.y", y + (rise or 70), gui.EASING_OUTQUAD, 0.9, 0.15)
+	gui.animate(n, "color.w", 0, gui.EASING_INQUAD, 0.35, 0.7, function() gui.delete_node(n) end)
+	return n
+end
+
+-- Confetti falling over a w x h area of `parent` (origin at the bottom left)
+function M.confetti(parent, w, h, count)
+	for _ = 1, count do
+		local x = math.random() * w
+		local cw, ch = 12 + math.random() * 8, 18 + math.random() * 10
+		local n = M.box(parent, math.random() < 0.25 and "heart_w" or "bar", x, h + 30 + math.random() * 120, cw, ch, candy())
+		local dur = 1.6 + math.random() * 1.2
+		gui.set_euler(n, V3(0, 0, math.random(0, 360)))
+		gui.animate(n, "position.y", -40, gui.EASING_INSINE, dur, math.random() * 0.4)
+		gui.animate(n, "position.x", x + math.random(-120, 120), gui.EASING_INOUTSINE, dur)
+		gui.animate(n, "euler.z", math.random(-720, 720), gui.EASING_LINEAR, dur, 0, function() gui.delete_node(n) end)
+	end
+end
+
+-- Moves a node to `to` (local to its parent) along a curve: x and y use different easings.
+-- trail: sparkle colour left along the way (nil = none).
+function M.fly(n, to, dur, delay, done, trail)
+	delay = delay or 0
+	gui.animate(n, "position.x", to.x, gui.EASING_INOUTSINE, dur, delay)
+	gui.animate(n, "position.y", to.y, gui.EASING_OUTQUAD, dur, delay, done and function() done() end or nil)
+	if trail then
+		local parent = gui.get_parent(n)
+		for k = 1, 4 do
+			M.after(delay + dur * k / 5, function()
+				local p = gui.get_position(n)
+				M.burst(parent, p.x, p.y, 1, trail, 14, 26)
+			end)
+		end
+	end
+end
+
+-- Slow ambient particles (bokeh and hearts drifting up) over a w x h area; loops forever.
+function M.ambient(parent, w, h, count)
+	for k = 1, count do
+		local heart = k % 3 == 0
+		local s = heart and (18 + math.random() * 14) or (30 + math.random() * 60)
+		local x = math.random() * w
+		local n = M.box(parent, heart and "heart_w" or "puff", x, -s, s, s,
+			heart and M.hex("#ffffff", 0.55) or M.hex(k % 2 == 0 and "#ffffff" or "#ffd6e6", 0.35))
+		local dur = 9 + math.random() * 8
+		-- the first rise starts part-way up, so the screen is never empty
+		local f = math.random()
+		gui.set_position(n, V3(x, -s + (h + 2 * s) * f, 0))
+		gui.animate(n, "position.y", h + s, gui.EASING_LINEAR, dur * (1 - f), 0, function()
+			gui.set_position(n, V3(x, -s, 0))
+			gui.animate(n, "position.y", h + s, gui.EASING_LINEAR, dur, 0, nil, gui.PLAYBACK_LOOP_FORWARD)
+		end)
+		gui.animate(n, "position.x", x + math.random(-40, 40), gui.EASING_INOUTSINE, 2.5 + math.random() * 2, 0, nil, gui.PLAYBACK_LOOP_PINGPONG)
+	end
 end
 
 return M

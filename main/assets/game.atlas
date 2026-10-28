@@ -50,7 +50,13 @@ images {
   image: "/main/assets/images/tile.png"
 }
 images {
-  image: "/main/assets/images/tile_glow.png"
+  image: "/main/assets/images/tile_gold.png"
+}
+images {
+  image: "/main/assets/images/tile_flash.png"
+}
+images {
+  image: "/main/assets/images/cloche.png"
 }
 images {
   image: "/main/assets/images/cust_cat.png"
@@ -101,9 +107,6 @@ images {
   image: "/main/assets/images/bar.png"
 }
 images {
-  image: "/main/assets/images/shadow.png"
-}
-images {
   image: "/main/assets/images/icon_pause.png"
 }
 images {
@@ -143,9 +146,6 @@ images {
   image: "/main/assets/images/icon_close.png"
 }
 images {
-  image: "/main/assets/images/icon_plus.png"
-}
-images {
   image: "/main/assets/images/icon_gear.png"
 }
 images {
@@ -158,9 +158,6 @@ images {
   image: "/main/assets/images/icon_globe.png"
 }
 images {
-  image: "/main/assets/images/icon_star.png"
-}
-images {
   image: "/main/assets/images/icon_chest.png"
 }
 images {
@@ -168,12 +165,6 @@ images {
 }
 images {
   image: "/main/assets/images/icon_tasks.png"
-}
-images {
-  image: "/main/assets/images/icon_lock.png"
-}
-images {
-  image: "/main/assets/images/icon_arrow.png"
 }
 images {
   image: "/main/assets/images/coin.png"
@@ -210,6 +201,24 @@ images {
 }
 images {
   image: "/main/assets/images/glow.png"
+}
+images {
+  image: "/main/assets/images/ring.png"
+}
+images {
+  image: "/main/assets/images/heart_w.png"
+}
+images {
+  image: "/main/assets/images/grad.png"
+}
+images {
+  image: "/main/assets/images/pat_hearts.png"
+}
+images {
+  image: "/main/assets/images/cloth.png"
+}
+images {
+  image: "/main/assets/images/gift.png"
 }
 images {
   image: "/main/assets/images/pat_stripes.png"
@@ -258,6 +267,15 @@ images {
 }
 images {
   image: "/main/assets/images/table.png"
+}
+images {
+  image: "/main/assets/images/vase.png"
+}
+images {
+  image: "/main/assets/images/flower_box.png"
+}
+images {
+  image: "/main/assets/images/flower_garland.png"
 }
 margin: 2
 extrude_borders: 2
