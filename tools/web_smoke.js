@@ -28,6 +28,8 @@ const PORT = 8700 + Math.floor(Math.random() * 200);
 const DEBUG_PORT = 9300 + Math.floor(Math.random() * 200);
 const BROWSER = [
   'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
+  'C:/Program Files (x86)/Microsoft/EdgeCore/156.0.4314.50/msedge.exe',
+  'C:/Program Files (x86)/Microsoft/EdgeCore/155.0.4283.45/msedge.exe',
   'C:/Program Files/Google/Chrome/Application/chrome.exe',
 ].find(p => fs.existsSync(p));
 

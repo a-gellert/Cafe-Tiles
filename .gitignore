@@ -7,3 +7,4 @@
 .DS_Store
 Thumbs.db
 /tools/node_modules
+/out
