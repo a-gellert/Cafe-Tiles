@@ -55,9 +55,9 @@ embedded_components {
   "gain: 1.0\n"
 }
 embedded_components {
-  id: "waste"
+  id: "showcase"
   type: "sound"
-  data: "sound: \"/main/assets/sounds/waste.ogg\"\n"
+  data: "sound: \"/main/assets/sounds/showcase.ogg\"\n"
   "looping: 0\n"
   "group: \"sfx\"\n"
   "gain: 1.0\n"
@@ -66,14 +66,6 @@ embedded_components {
   id: "arrive"
   type: "sound"
   data: "sound: \"/main/assets/sounds/arrive.ogg\"\n"
-  "looping: 0\n"
-  "group: \"sfx\"\n"
-  "gain: 1.0\n"
-}
-embedded_components {
-  id: "angry"
-  type: "sound"
-  data: "sound: \"/main/assets/sounds/angry.ogg\"\n"
   "looping: 0\n"
   "group: \"sfx\"\n"
   "gain: 1.0\n"

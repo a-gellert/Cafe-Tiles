@@ -12,25 +12,26 @@ local V3 = vmath.vector3
 local H = ui.hex
 
 -- [tier] = wall color, pattern sprite, pattern color, awning color
+-- (a coffee-house look for everyone: cream and terracotta, sage, harbour blue, mustard and brick)
 local WALL = {
-	[0] = { "#fde7e3", "pat_stripes", "#f8d7d3", "#f58aa6" },
-	[1] = { "#d9f3e7", "pat_stripes", "#c4ead8", "#43b892" },
-	[2] = { "#ffdfea", "pat_dots", "#ffc8da", "#ef6f9a" },
-	[3] = { "#ebe0fe", "pat_diamond", "#d9c8ff", "#9a7cf0" },
+	[0] = { "#f5e9da", "pat_stripes", "#ecdcc6", "#e07a5f" },
+	[1] = { "#dcebdc", "pat_stripes", "#cbe0cb", "#4a9b7f" },
+	[2] = { "#dde8f0", "pat_dots", "#c9d9e6", "#3d6e9e" },
+	[3] = { "#f6e3b4", "pat_diamond", "#ead08f", "#c8553d" },
 }
 -- [tier] = front color, top plank color, panel line color
 local COUNTER = {
-	[0] = { "#e2a68a", "#a7664c", "#d1937a" },
-	[1] = { "#fbf5ef", "#c9b4a5", "#ece0d6" },
-	[2] = { "#a4e3cf", "#fbf5ef", "#86d0b9" },
-	[3] = { "#ffb0c4", "#ffd36b", "#f293ad" },
+	[0] = { "#d9a07a", "#9c623f", "#c98f6a" },
+	[1] = { "#f7f1e8", "#c9b4a5", "#e8ddd0" },
+	[2] = { "#a8d5c2", "#f7f1e8", "#8cc4ae" },
+	[3] = { "#7a4e33", "#f2ece4", "#6a4229" },
 }
 -- [tier] = floor color, pattern sprite, pattern color
 local FLOOR = {
-	[0] = { "#ecc9b6", nil, nil },
-	[1] = { "#f3ebe4", "pat_checker", "#ffffff" },
-	[2] = { "#e2b190", "pat_planks", "#f0c9a8" },
-	[3] = { "#fbd9e2", "pat_checker", "#ffffff" },
+	[0] = { "#e3c4a8", nil, nil },
+	[1] = { "#f1e9df", "pat_checker", "#ffffff" },
+	[2] = { "#d9a77f", "pat_planks", "#e9bf98" },
+	[3] = { "#d3dce2", "pat_checker", "#ffffff" },
 }
 
 local function tiled(parent, sprite, cx, cy, w, h, cell, color, list)
@@ -175,8 +176,21 @@ function M.build(parent, w, h, counter_y, opts)
 	-- things on the counter (in front of the customers)
 	local ty = counter_y + 6
 	if t_counter >= 1 then
-		local m = pop("counter", ui.icon(root, "coffee_machine", full and -w * 0.36 or -w / 2 + 52, ty + 44, full and 120 or 92))
+		local mx, msize = full and -w * 0.36 or -w / 2 + 52, full and 120 or 92
+		local m = pop("counter", ui.icon(root, "coffee_machine", mx, ty + 44, msize))
 		gui.set_pivot(m, gui.PIVOT_CENTER)
+		-- fresh coffee: steam curls up from the machine
+		if opts.animate then
+			for k = 1, 3 do
+				local sx = mx + (k - 2) * msize * 0.12
+				local p = ui.box(root, "puff", sx, ty + 44 + msize * 0.45, 26, 26, H("#ffffff", 0))
+				local d = (k - 1) * 0.7
+				gui.animate(p, "position.y", ty + 44 + msize * 0.45 + 70, gui.EASING_OUTSINE, 2.1, d, nil, gui.PLAYBACK_LOOP_FORWARD)
+				gui.animate(p, "size", V3(56, 56, 0), gui.EASING_OUTSINE, 2.1, d, nil, gui.PLAYBACK_LOOP_FORWARD)
+				gui.animate(p, "color.w", 0.5, gui.EASING_INOUTSINE, 1.05, d, nil, gui.PLAYBACK_LOOP_PINGPONG)
+				gui.animate(p, "position.x", sx + 8, gui.EASING_INOUTSINE, 0.7, d, nil, gui.PLAYBACK_LOOP_PINGPONG)
+			end
+		end
 	end
 	if t_kitchen >= 2 then pop("kitchen", ui.icon(root, "cake_display", full and w * 0.36 or w / 2 - 62, ty + 40, full and 150 or 112)) end
 	if t_kitchen >= 3 and full then pop("kitchen", ui.icon(root, "cake_display", w * 0.18, ty + 40, 130)) end

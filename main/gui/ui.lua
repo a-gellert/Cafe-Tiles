@@ -16,24 +16,24 @@ function M.hex(s, a)
 	return vmath.vector4(math.floor(v / 65536) / 255, math.floor(v / 256) % 256 / 255, v % 256 / 255, a or 1)
 end
 
--- pastel cafe palette
+-- warm coffee-house palette for everyone: cream, caramel wood, teal, terracotta, espresso
 M.WHITE = vmath.vector4(1, 1, 1, 1)
-M.INK = M.hex("#5a2a45")       -- plum: text outlines and dark text
-M.PLUM = M.hex("#6b2f5c")      -- HUD pills (with alpha)
-M.CREAM = M.hex("#fff7f2")
-M.ORANGE = M.hex("#ff7b93")    -- main call to action (coral pink)
-M.PEACH = M.hex("#ffa05c")
+M.INK = M.hex("#3d2b22")       -- espresso: text outlines and dark text
+M.COCOA = M.hex("#47362c")     -- HUD pills (with alpha)
+M.CREAM = M.hex("#fff8ee")
+M.ORANGE = M.hex("#ff8c42")    -- main call to action
+M.PEACH = M.hex("#ffb15c")
 M.GREEN = M.hex("#35c493")
-M.BLUE = M.hex("#5aaeff")
-M.PINK = M.hex("#ff6fa8")
-M.ROSE = M.hex("#ffb3cb")
-M.PURPLE = M.hex("#a27bff")
+M.BLUE = M.hex("#4da3f0")
+M.TEAL = M.hex("#2fb0a3")      -- ribbons, banners, calm accents
+M.CORAL = M.hex("#ef6f5e")     -- hard levels, alerts
+M.PURPLE = M.hex("#8270ee")
 M.MINT = M.hex("#7fe3c4")
 M.GOLD = M.hex("#ffd23f")
-M.GREY = M.hex("#b3a2ad")
-M.DIM = vmath.vector4(0.72, 0.65, 0.76, 1)
--- sparkle colours for bursts
-M.CANDY = { M.hex("#ffd23f"), M.hex("#ff8fbf"), M.hex("#ffffff"), M.hex("#9fe8ff"), M.hex("#c7a8ff"), M.hex("#a8f0c8") }
+M.GREY = M.hex("#b5a99d")
+M.DIM = vmath.vector4(0.74, 0.69, 0.64, 1)
+-- sparkle colours for bursts: warm light with a few cool glints
+M.CANDY = { M.hex("#ffd23f"), M.hex("#ffb36b"), M.hex("#ffffff"), M.hex("#9fe8ff"), M.hex("#a8f0c8"), M.hex("#ffe9b0") }
 
 -- generation counter: delayed callbacks from a torn-down screen are dropped
 M.gen = 0
@@ -253,12 +253,20 @@ function M.ring(parent, x, y, size, color, dur)
 	gui.animate(n, "color.w", 0, gui.EASING_INQUAD, dur or 0.4, 0, function() gui.delete_node(n) end)
 end
 
+-- A soft additive flash of light that swells and fades
+function M.flash_light(parent, x, y, size, color, dur)
+	local n = M.glow(M.box(parent, "glow", x, y, size * 0.4, size * 0.4, color or M.hex("#fff1c4", 0.9)))
+	gui.animate(n, "size", V3(size, size, 0), gui.EASING_OUTCUBIC, dur or 0.45)
+	gui.animate(n, "color.w", 0, gui.EASING_INQUAD, dur or 0.45, 0, function() gui.delete_node(n) end)
+	return n
+end
+
 -- Little hearts floating up and fading
 function M.hearts(parent, x, y, count, spread)
 	for k = 1, count do
 		local s = 26 + math.random() * 18
 		local n = M.box(parent, "heart_w", x + math.random(-spread, spread), y, s, s,
-			k % 2 == 0 and M.hex("#ff8fbf") or M.hex("#ff6f9f"))
+			k % 2 == 0 and M.hex("#ff8a6b") or M.hex("#ff5f5f"))
 		local dur = 0.8 + math.random() * 0.4
 		local d = 0.05 * k
 		gui.set_scale(n, V3(0.2, 0.2, 1))
@@ -282,8 +290,10 @@ end
 function M.confetti(parent, w, h, count)
 	for _ = 1, count do
 		local x = math.random() * w
+		local round = math.random() < 0.3
 		local cw, ch = 12 + math.random() * 8, 18 + math.random() * 10
-		local n = M.box(parent, math.random() < 0.25 and "heart_w" or "bar", x, h + 30 + math.random() * 120, cw, ch, candy())
+		if round then ch = cw end
+		local n = M.box(parent, round and "btn_round" or "bar", x, h + 30 + math.random() * 120, cw, ch, candy())
 		local dur = 1.6 + math.random() * 1.2
 		gui.set_euler(n, V3(0, 0, math.random(0, 360)))
 		gui.animate(n, "position.y", -40, gui.EASING_INSINE, dur, math.random() * 0.4)
@@ -309,14 +319,18 @@ function M.fly(n, to, dur, delay, done, trail)
 	end
 end
 
--- Slow ambient particles (bokeh and hearts drifting up) over a w x h area; loops forever.
+-- Slow ambient particles (warm bokeh and twinkling motes drifting up) over a w x h area; loops forever.
 function M.ambient(parent, w, h, count)
 	for k = 1, count do
-		local heart = k % 3 == 0
-		local s = heart and (18 + math.random() * 14) or (30 + math.random() * 60)
+		local mote = k % 3 == 0
+		local s = mote and (16 + math.random() * 14) or (30 + math.random() * 60)
 		local x = math.random() * w
-		local n = M.box(parent, heart and "heart_w" or "puff", x, -s, s, s,
-			heart and M.hex("#ffffff", 0.55) or M.hex(k % 2 == 0 and "#ffffff" or "#ffd6e6", 0.35))
+		local n = M.box(parent, mote and "spark" or "puff", x, -s, s, s,
+			mote and M.hex("#fff3d6", 0.8) or M.hex(k % 2 == 0 and "#ffffff" or "#ffe6c2", 0.35))
+		if mote then
+			M.glow(n)
+			gui.animate(n, "color.w", 0.2, gui.EASING_INOUTSINE, 0.8 + math.random() * 0.8, math.random(), nil, gui.PLAYBACK_LOOP_PINGPONG)
+		end
 		local dur = 9 + math.random() * 8
 		-- the first rise starts part-way up, so the screen is never empty
 		local f = math.random()

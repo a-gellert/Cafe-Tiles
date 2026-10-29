@@ -27,10 +27,10 @@ local function free_tiles(s)
 	return c
 end
 
-print("lvl  popup%  rescue%  lost%  secs  waste  angry  stars")
+print("lvl  popup%  rescue%  lost%  secs  case   ord%   stars")
 local total_secs, total_popups = 0, 0
 for level = first, last do
-	local popups, rescues, lost, secs, waste, angry, stars = 0, 0, 0, 0, 0, 0, 0
+	local popups, rescues, lost, secs, shown, share, stars = 0, 0, 0, 0, 0, 0, 0
 	for _ = 1, runs do
 		local s = session.new(level)
 		local popup, rescued, t = false, false, 0
@@ -62,15 +62,15 @@ for level = first, last do
 		if rescued then rescues = rescues + 1 end
 		if s.status ~= "won" then lost = lost + 1 end
 		secs = secs + t
-		waste = waste + s.waste
-		angry = angry + s.angry
+		shown = shown + s.showcase
+		share = share + s.dishes * 300 / s.total
 		if s.status == "won" then stars = stars + session.result(s).stars end
 	end
 	total_secs = total_secs + secs / runs
 	total_popups = total_popups + popups / runs
 	print(string.format("%-4d %-7d %-8d %-6d %-5d %-6.1f %-6.1f %.1f", level,
 		math.floor(popups * 100 / runs), math.floor(rescues * 100 / runs), math.floor(lost * 100 / runs),
-		math.floor(secs / runs), waste / runs, angry / runs, stars / math.max(1, runs - lost)))
+		math.floor(secs / runs), shown / runs, share / runs, stars / math.max(1, runs - lost)))
 end
 print(string.format("jam popups per player over levels %d-%d: %.2f, level time %.1f min",
 	first, last, total_popups, total_secs / 60))

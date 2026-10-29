@@ -15,8 +15,13 @@ M.FOOD = {
 M.CUSTOMERS = { "cat", "bear", "bunny", "panda", "fox", "frog", "pig", "penguin" }
 
 -- Economy (coins)
-M.DISH_PRICE = 4                -- per served order item (one triple)
-M.TIP_MAX = 4                   -- tip at full patience, scales down with patience
+M.DISH_PRICE = 4                -- per served order item (one triple): x2 the display case
+M.SHOWCASE_PRICE = 2            -- a triple nobody ordered goes to the display case
+M.TIP_MAX = 4                   -- tip at a full tip meter...
+M.TIP_MIN = 1                   -- ...and once it ran out (guests never leave unserved)
+M.TIP_METER_LEVEL = 6           -- before this level guests have no tip meter (always full tips)
+M.STARS_3 = 0.8                 -- share of triples served to guests for 3 stars...
+M.STARS_2 = 0.5                 -- ...and for 2 stars
 M.LEVEL_BONUS_BASE = 10         -- completion bonus = (base + level * per_level) * stars / 3
 M.LEVEL_BONUS_PER_LEVEL = 2
 M.DECOR_BONUS = 0.05            -- +5% coins per bought decor tier
@@ -60,7 +65,7 @@ M.GIFTS = {
 M.GIFT_LATER = { coins = 70 }
 
 -- Phase 4: first-session playtime (Poki: easy start, no dying while learning, reveal features gradually)
-M.FREE_CHANCE_LEVEL = 15        -- up to this level the first jam is rescued for free, without a popup
+M.FREE_CHANCE_LEVEL = 1000      -- the first jam of a level is rescued for free, without a popup (every level: no stress)
 M.ASSIST_TRAY = 4               -- hint hand on the best tile when the tray holds this many tiles
 M.ASSIST_DELAY = 0.8            -- seconds without a tap before that hint shows...
 M.ASSIST_DELAY_LATE = 1.5       -- ...and after ASSIST_LEVEL (quick players never see it)

@@ -5,11 +5,13 @@
 -- Rules
 --   * a free tile goes to the tray, next to tiles of the same food;
 --   * three of a kind leave the tray: they serve a waiting order item of that food
---     (most impatient customer first) or, when nobody ordered it, go to the bin (waste);
+--     (x2 coins, most impatient customer first) or, when nobody ordered it, go to the
+--     display case (showcase) for the base price: every triple pays;
+--   * guests never leave unserved: patience is a tip meter (full tips while it lasts);
 --   * 7 tiles in the tray without a match = kitchen jam (second chance: 3 tiles go to the shelf);
 --   * orders are only made from unreserved triples, so every order can be served;
 --   * the level is won when board, tray and shelf are empty.
---   * served triples in quick succession build a combo (extra coins per dish);
+--   * triples in quick succession build a combo (extra coins per dish);
 --   * golden tiles pay extra coins, cloche tiles hide their dish until they are free.
 local config = require "main.modules.config"
 local levels = require "main.modules.levels"
@@ -66,16 +68,16 @@ function M.new(level, opts)
 		running = false,  -- patience ticks only after the first tap
 		coins = 0,
 		served = 0,
-		angry = 0,
-		waste = 0,
-		dishes = 0,
+		showcase = 0,      -- triples nobody ordered (to the display case)
+		case_foods = {},   -- their foods in order (the case shows the latest)
+		dishes = 0,        -- order items served
 		chances = config.SECOND_CHANCES,
 		paid_chances = config.PAID_CHANCES,
 		free_chances = level <= config.FREE_CHANCE_LEVEL and 1 or 0,
 		vips = 0,          -- VIP guests spawned this level
 		vip_served = 0,
 		food_done = {},    -- served triples per food (missions)
-		clock = 0,         -- level time while running (combo window)
+		clock = 0,         -- level time while running (combo window, tip meters)
 		combo = 0,
 		last_serve = -100,
 		best_combo = 0,
@@ -184,24 +186,18 @@ local function spawn(s, seat)
 	return true
 end
 
-local function leave(s, seat, happy)
+-- a guest leaves once the whole order is served; the tip shrinks with the tip meter
+local function leave(s, seat)
 	local c = s.seats[seat]
-	local tip = 0
-	if happy then
-		local ratio = c.patience_max > 0 and math.max(0, c.patience / c.patience_max) or 1
-		tip = math.max(1, round(config.TIP_MAX * ratio * s.mult * (c.vip and config.VIP_TIP or 1)))
-		s.coins = s.coins + tip
-		s.served = s.served + 1
-		if c.vip then s.vip_served = s.vip_served + 1 end
-	else
-		for _, it in ipairs(c.items) do
-			if not it.done then s.reserved[it.type] = s.reserved[it.type] - 1 end
-		end
-		s.angry = s.angry + 1
-	end
+	local ratio = c.patience_max > 0 and math.max(0, c.patience / c.patience_max) or 1
+	local tip = config.TIP_MIN + (config.TIP_MAX - config.TIP_MIN) * ratio
+	tip = math.max(1, round(tip * s.mult * (c.vip and config.VIP_TIP or 1)))
+	s.coins = s.coins + tip
+	s.served = s.served + 1
+	if c.vip then s.vip_served = s.vip_served + 1 end
 	s.seats[seat] = false
 	s.seat_timer[seat] = config.ARRIVE_DELAY
-	push(s, { e = "leave", seat = seat, happy = happy, coins = tip, kind = c.kind, vip = c.vip })
+	push(s, { e = "leave", seat = seat, coins = tip, kind = c.kind, vip = c.vip, full = ratio >= 0.5 })
 end
 
 -- golden tiles among a leaving triple: extra coins
@@ -218,12 +214,16 @@ local function pay_gold(s, ids)
 	return coins
 end
 
+local function combo_bonus(s)
+	return math.min(config.COMBO_COIN_MAX, math.max(0, s.combo - 1))
+end
+
 local function serve_item(s, seat, k, ids, rush, gold)
 	local c = s.seats[seat]
 	local it = c.items[k]
 	it.done = true
 	s.reserved[it.type] = s.reserved[it.type] - 1
-	local bonus = rush and 0 or math.min(config.COMBO_COIN_MAX, math.max(0, s.combo - 1))
+	local bonus = rush and 0 or combo_bonus(s)
 	local pay = round(config.DISH_PRICE * s.mult * (c.vip and config.VIP_PAY or 1)) + bonus
 	s.coins = s.coins + pay
 	s.combo_coins = s.combo_coins + bonus
@@ -234,7 +234,7 @@ local function serve_item(s, seat, k, ids, rush, gold)
 	for _, other in ipairs(c.items) do
 		if not other.done then return end
 	end
-	leave(s, seat, true)
+	leave(s, seat)
 end
 
 local function most_urgent_seat(s, food)
@@ -258,16 +258,21 @@ end
 local function resolve_triple(s, food, ids)
 	s.left[food] = s.left[food] - 3
 	local gold = pay_gold(s, ids)
+	-- any triple keeps the combo going
+	s.combo = s.clock - s.last_serve <= config.COMBO_WINDOW and s.combo + 1 or 1
+	s.last_serve = s.clock
+	s.best_combo = math.max(s.best_combo, s.combo)
 	local seat, k = most_urgent_seat(s, food)
 	if seat then
-		s.combo = s.clock - s.last_serve <= config.COMBO_WINDOW and s.combo + 1 or 1
-		s.last_serve = s.clock
-		s.best_combo = math.max(s.best_combo, s.combo)
 		serve_item(s, seat, k, ids, false, gold)
 	else
-		s.combo = 0
-		s.waste = s.waste + 1
-		push(s, { e = "waste", ids = ids, type = food, gold = gold })
+		local bonus = combo_bonus(s)
+		local pay = round(config.SHOWCASE_PRICE * s.mult) + bonus
+		s.coins = s.coins + pay
+		s.combo_coins = s.combo_coins + bonus
+		s.showcase = s.showcase + 1
+		s.case_foods[#s.case_foods + 1] = food
+		push(s, { e = "showcase", ids = ids, type = food, coins = pay, combo = s.combo, gold = gold })
 	end
 end
 
@@ -550,9 +555,9 @@ function M.update(s, dt)
 	for i = 1, config.SEATS do
 		local c = s.seats[i]
 		if c then
-			if s.running and s.status == "play" and c.patience_max > 0 then
-				c.patience = c.patience - dt
-				if c.patience <= 0 then leave(s, i, false) end
+			-- the tip meter runs down, the guest stays until served
+			if s.running and s.status == "play" and c.patience > 0 then
+				c.patience = math.max(0, c.patience - dt)
 			end
 		elseif s.status == "play" then
 			s.seat_timer[i] = s.seat_timer[i] - dt
@@ -617,15 +622,9 @@ function M.suggest(s)
 end
 
 function M.result(s)
-	-- the bin is part of the game: a few wasted triples still give 3 stars on big levels
-	local triples = s.total / 3
-	local mistakes = s.waste + 2 * s.angry
-	local stars = 1
-	if mistakes <= math.floor(triples * 0.1) then
-		stars = 3
-	elseif mistakes <= math.floor(triples * 0.3) + 1 then
-		stars = 2
-	end
+	-- stars for the share of triples that went to guests (the display case is never a mistake)
+	local share = s.dishes / (s.total / 3)
+	local stars = share >= config.STARS_3 and 3 or (share >= config.STARS_2 and 2 or 1)
 	local bonus = round((config.LEVEL_BONUS_BASE + config.LEVEL_BONUS_PER_LEVEL * s.level) * stars / 3 * s.mult
 		* (s.params.hard and config.HARD_BONUS or 1))
 	local new_streak = (s.streak or 0) + 1
@@ -641,8 +640,8 @@ function M.result(s)
 		streak_bonus = streak_bonus,
 		earned = s.coins,
 		coins = s.coins + total_bonus,
-		waste = s.waste,
-		angry = s.angry,
+		showcase = s.showcase,
+		dishes = s.dishes,
 		served = s.served,
 		vip_served = s.vip_served,
 		food_done = s.food_done,

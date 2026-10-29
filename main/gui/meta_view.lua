@@ -11,7 +11,7 @@ local M = {}
 
 local V3 = vmath.vector3
 local H = ui.hex
-local PILL = H("#6b2f5c", 0.9)
+local PILL = H("#47362c", 0.9)
 
 -- the preview cafe is built at this inner width and scaled down, so it looks like the menu cafe
 local PREVIEW_W = 1280
@@ -49,7 +49,7 @@ function M.goal_bar(parent, x, y, w, from, on_ready)
 	local coins = progress.data.coins
 	local ready = coins >= goal.price
 	local row = ui.slice(parent, "panel", x, y, w, 76, PILL, 32)
-	local badge = ui.box(row, "btn_round", -w / 2 + 40, 0, 68, 68, H("#ffe0ec"))
+	local badge = ui.box(row, "btn_round", -w / 2 + 40, 0, 68, 68, H("#fff0dc"))
 	cafe_view.swatch(badge, goal.id, goal.tier, 0, 3, 42)
 	local bx, bw = -w / 2 + 84, w - 102
 	ui.slice(row, "bar", bx + bw / 2, 0, bw, 38, H("#000000", 0.3), 12)
@@ -89,7 +89,7 @@ end
 -- The player's cafe in a framed window, pw x ph, with two regulars at the counter.
 -- Returns the cafe_view handle (for cafe_view.reveal).
 function M.preview(parent, x, y, pw, ph)
-	ui.slice(parent, "panel", x, y - 8, pw + 22, ph + 22, H("#c2507e", 0.3), 30)
+	ui.slice(parent, "panel", x, y - 8, pw + 22, ph + 22, H("#7a5235", 0.3), 30)
 	ui.slice(parent, "panel", x, y, pw + 18, ph + 18, ui.WHITE, 30)
 	local k = pw / PREVIEW_W
 	local vh = ph / k

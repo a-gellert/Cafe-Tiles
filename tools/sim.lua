@@ -3,6 +3,7 @@
 --   luajit-64.exe tools/sim.lua [first_level] [last_level] [seconds_per_tap]
 -- "min" = estimated session minutes (taps * seconds_per_tap + LEVEL_OVERHEAD per level),
 -- "tasks" = chef's tasks finished on that level, "2nd" = free rescues + ad chances + coin continues,
+-- "case" = triples to the display case, "ord%" = triples served to guests (stars),
 -- "cmb" = best combo, "cc" = combo coins, "gold" = golden tiles found, "gifts" = session gifts so far.
 package.path = "./?.lua;" .. package.path
 
@@ -34,7 +35,7 @@ local tap_time = tonumber(arg[3]) or 0.9
 
 local totals = { won = 0, lost = 0, chances = 0, coins = 0, stars = 0 }
 print(string.format("%-4s %-5s %-3s %-5s %-4s %-5s %-5s %-4s %-5s %-5s %-5s %-5s %-6s",
-	"lvl", "tiles", "lay", "grid", "typ", "free0", "res", "2nd", "waste", "angry", "stars", "coins", "taps") .. " vip tasks cmb cc  gold gifts min")
+	"lvl", "tiles", "lay", "grid", "typ", "free0", "res", "2nd", "case", "ord%", "stars", "coins", "taps") .. " vip tasks cmb cc  gold gifts min")
 for level = first, last do
 	local s = session.new(level)
 	local p = s.params
@@ -101,7 +102,7 @@ for level = first, last do
 	totals.stars = totals.stars + r.stars
 	print(string.format("%-4d %-5d %-3d %-5s %-4d %-5d %-5s %-4d %-5d %-5d %-5d %-5d %-6d",
 		level, s.total, max_z + 1, s.cols .. "x" .. s.rows, p.types, free0, outcome, used,
-		r.waste, r.angry, r.stars, r.coins, taps) .. string.format(" %-3d %-5d %-3d %-3d %-4d %-5d %.1f",
+		r.showcase, math.floor(r.dishes * 300 / s.total), r.stars, r.coins, taps) .. string.format(" %-3d %-5d %-3d %-3d %-4d %-5d %.1f",
 		s.vips, finished, s.best_combo, s.combo_coins, s.gold_found, gifts_at(progress_gifts), minutes))
 	-- sanity: the deal must keep every food a multiple of 3
 	local count = {}

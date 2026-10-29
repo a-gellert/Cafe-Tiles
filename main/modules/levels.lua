@@ -18,8 +18,8 @@ local function clamp(v, a, b) return math.max(a, math.min(b, v)) end
 -- the 5th level is "hard", the next one is a breather.
 local OPENERS = {
 	{ types = 3, triples = 6, layers = 2, open = 1, items = { 1, 1 }, patience = 0 },
-	{ types = 4, triples = 9, layers = 2, open = 1, items = { 1, 1 }, patience = 80 },
-	{ types = 5, triples = 12, layers = 3, open = 2, items = { 1, 2 }, patience = 70 },
+	{ types = 4, triples = 9, layers = 2, open = 1, items = { 1, 1 }, patience = 0 },
+	{ types = 5, triples = 12, layers = 3, open = 2, items = { 1, 2 }, patience = 0 },
 }
 
 function M.get(n)
@@ -45,7 +45,8 @@ function M.get(n)
 			open = (hard and n >= 10 or n >= 25) and 3 or 2,
 			items_min = 1,
 			items_max = n < 10 and 2 or 3,
-			patience_per_item = math.max(34, 56 - n * 0.4),
+			-- the tip meter: guests never leave, a slow player only gets smaller tips
+			patience_per_item = n < config.TIP_METER_LEVEL and 0 or math.max(34, 56 - n * 0.4),
 			hard = hard,
 		}
 	end

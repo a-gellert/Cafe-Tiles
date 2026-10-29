@@ -137,11 +137,12 @@ sfx('coin', 0.28, t => {
   const f = t < 0.055 ? 1976 : 2637, tt = t < 0.055 ? t : t - 0.055;
   return (Math.sin(TAU * f * tt) + 0.15 * Math.sin(TAU * 3 * f * tt)) * Math.exp(-tt * 18) * Math.min(1, tt / 0.002);
 }, 0.4);
-// to the bin: a soft "whump"
+// to the display case: a glassy two-note "ting-ting" with a little shimmer
 {
-  const nb = noiseBuf(0.35, 0, 1200, 9);
-  sfx('waste', 0.35, (t, i) => Math.sin(TAU * (80 * t + 140 * (1 - Math.exp(-8 * t)) / 8)) * env(t, 0.004, 9)
-    + nb[i] * 0.8 * Math.sin(Math.PI * Math.min(1, t / 0.3)), 0.45);
+  const p = [[1, 1, 0], [2.92, 0.22, 4], [5.1, 0.06, 9]];
+  const b1 = bell(note(88), 7, p), b2 = bell(note(93), 6, p);
+  const sh = shimmer(5, 4000, 7000, 0.2, 0.05);
+  sfx('showcase', 0.6, t => b1(t) * 0.8 + at(t, 0.07, b2) + sh(t), 0.42);
 }
 // a guest arrives: the door chime
 {
@@ -149,11 +150,6 @@ sfx('coin', 0.28, t => {
   const b1 = bell(1760, 5, p), b2 = bell(1397, 5, p);
   sfx('arrive', 0.8, t => b1(t) + at(t, 0.13, b2), 0.38);
 }
-// an impatient guest leaves: a soft "hmph"
-sfx('angry', 0.38, t => {
-  const ph = TAU * (220 * t + 110 * (1 - Math.exp(-6 * t)) / 6) + 0.5 * Math.sin(TAU * 7 * t);
-  return (Math.sin(ph) + 0.25 * Math.sin(2 * ph) + 0.1 * Math.sin(3 * ph)) * env(t, 0.02, 5);
-}, 0.38, b => lowpass(b, 1800, SR));
 // booster: a magic sweep with sparkles
 {
   const sh = shimmer(10, 1500, 4500, 0.4, 0.12);

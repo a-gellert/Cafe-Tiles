@@ -11,9 +11,9 @@ height = 960
 high_dpi = 1
 
 [render]
-clear_color_red = 0.992
-clear_color_green = 0.894
-clear_color_blue = 0.918
+clear_color_red = 0.973
+clear_color_green = 0.925
+clear_color_blue = 0.863
 clear_color_alpha = 1.0
 
 [html5]

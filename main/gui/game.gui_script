@@ -200,7 +200,7 @@ function app.on_won_soon()
 		poki.gameplay_stop()
 		poki.measure("level", s.level, "complete")
 		audio.play("win")
-		log("level", s.level, "won", "stars", r.stars, "coins", r.coins, "waste", r.waste, "angry", r.angry, "chances", 2 - s.chances)
+		log("level", s.level, "won", "stars", r.stars, "coins", r.coins, "orders", r.dishes, "showcase", r.showcase, "chances", 2 - s.chances)
 		app.open_popup("win", r)
 	end)
 end
@@ -248,7 +248,8 @@ end
 function app.mission_check()
 	local s = app.session
 	if not s or s.level < config.REVEAL_LEVEL then return end
-	local done = missions.live_done(progress.data.missions, { served = s.served, food_done = s.food_done, vip_served = s.vip_served })
+	local done = missions.live_done(progress.data.missions, { served = s.served, food_done = s.food_done, vip_served = s.vip_served,
+		gold_found = s.gold_found, showcase = s.showcase })
 	for _, i in ipairs(done) do
 		if not app.announced[i] then
 			app.announced[i] = true
@@ -435,7 +436,7 @@ function init(self)
 		elseif dp == "gift" then
 			app.open_popup("chest", { coins = 25, booster = "rush", gift = true })
 		else
-			app.open_popup(dp, dp == "win" and { stars = 3, coins = 128, earned = 92, bonus = 36, waste = 0, angry = 0, served = 9, streak = 2 } or nil)
+			app.open_popup(dp, dp == "win" and { stars = 3, coins = 128, earned = 92, bonus = 36, showcase = 2, dishes = 10, served = 9, streak = 2 } or nil)
 		end
 	end
 end

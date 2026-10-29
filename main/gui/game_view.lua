@@ -33,15 +33,20 @@ local SHELF_SCALE = 0.72
 local SEAT_STEP = 230
 local BAR_W = 120
 
-local BG_TOP = H("#ffd3e3")
-local BG_BOTTOM = H("#ffeadf")
-local TRAY = H("#f59ec0")
-local TRAY_WARN = H("#ffa05c")
-local TRAY_DANGER = H("#ff4d6d")
-local PILL = H("#6b2f5c", 0.85)
-local CLOCHE_DIM = vmath.vector4(0.9, 0.86, 0.95, 1)   -- a covered cloche stays bright and shiny
+local BG_TOP = H("#cfe8e1")       -- soft sage
+local BG_BOTTOM = H("#f8ecdc")    -- latte cream
+local TRAY = H("#3fa89c")         -- teal tray, caramel tiles stand out on it
+local TRAY_WARN = H("#f2a541")    -- amber
+local TRAY_DANGER = H("#e8774f")  -- terracotta: a calm warning, no alarm red
+local PILL = H("#47362c", 0.85)
+local CLOCHE_DIM = vmath.vector4(0.92, 0.9, 0.88, 1)   -- a covered cloche stays bright and shiny
+local TIP_HIGH = H("#5fd39a")     -- the tip meter: green while tips are full...
+local TIP_LOW = H("#ffc23f")      -- ...golden as they shrink (never red: guests do not leave)
 
-local PRAISE_COLORS = { H("#ffd23f"), H("#ff8fc4"), H("#7fdcff"), H("#c9a4ff"), H("#7fe8b4") }
+local PRAISE_COLORS = { H("#ffd23f"), H("#ffb36b"), H("#7fdcff"), H("#a8f0c8"), H("#ffe08a") }
+-- display case: six dish spots on two shelves (case units, see the "showcase" sprite)
+local CASE_SIZE = 116
+local CASE_SLOTS = { { -22, 15 }, { 0, 15 }, { 22, 15 }, { -22, -23 }, { 0, -23 }, { 22, -23 } }
 
 local V = {}
 
@@ -218,12 +223,14 @@ local function build_seat(i, c, appear)
 		if it.done then gui.set_color(icon, vmath.vector4(1, 1, 1, 0.45)) end
 		sv.items[k] = { icon = icon, check = check }
 	end
+	-- the tip meter (from config.TIP_METER_LEVEL): only the size of the tip, guests never leave
 	if c.patience_max > 0 then
-		local bar_w = math.min(BAR_W, bw - 30)
+		local bar_w = math.min(BAR_W, bw - 46)
 		sv.bar_w = bar_w
-		ui.slice(sv.bubble, "bar", 0, -27, bar_w + 6, 14, H("#6b2f5c", 0.22), 6)
-		sv.bar = ui.slice(sv.bubble, "bar", -bar_w / 2, -27, bar_w, 9, ui.GREEN, 4)
+		ui.slice(sv.bubble, "bar", -8, -27, bar_w + 6, 14, H("#47362c", 0.18), 6)
+		sv.bar = ui.slice(sv.bubble, "bar", -8 - bar_w / 2, -27, bar_w, 9, TIP_HIGH, 4)
 		gui.set_pivot(sv.bar, gui.PIVOT_W)
+		sv.tip_coin = ui.box(sv.bubble, "coin", bar_w / 2 + 8, -27, 24, 24)
 	end
 	if appear then
 		gui.set_position(root, V3(seat_x(i), -170, 0))
@@ -234,16 +241,17 @@ local function build_seat(i, c, appear)
 	return sv
 end
 
-local function update_patience()
+local function update_tips()
 	for _, sv in pairs(V.seats) do
 		local c = sv.customer
 		if sv.bar and c.patience_max > 0 then
 			local f = math.max(0, c.patience / c.patience_max)
 			gui.set_size(sv.bar, V3(math.max(8, sv.bar_w * f), 9, 0))
-			gui.set_color(sv.bar, f > 0.5 and ui.GREEN or (f > 0.25 and ui.GOLD or H("#ff4d6d")))
-			if f < 0.25 and not sv.worried then
-				sv.worried = true
-				gui.animate(sv.avatar, "position.x", 4, gui.EASING_INOUTSINE, 0.12, 0, nil, gui.PLAYBACK_LOOP_PINGPONG)
+			gui.set_color(sv.bar, f > 0.5 and TIP_HIGH or TIP_LOW)
+			-- tips at their minimum: the coin dims, the guest keeps smiling
+			if f <= 0 and not sv.tip_out then
+				sv.tip_out = true
+				gui.animate(sv.tip_coin, "color.w", 0.35, gui.EASING_OUTQUAD, 0.4)
 			end
 		end
 	end
@@ -257,29 +265,61 @@ local function hop(sv)
 	end)
 end
 
-local function leave_seat(seat, happy)
+-- every guest leaves happy: a heart, a little wave, then down behind the counter
+local function leave_seat(seat)
 	local sv = V.seats[seat]
 	if not sv then return end
 	V.seats[seat] = nil
-	local function go()
-		gui.cancel_animations(sv.avatar, "position.x")
-		local mood = ui.box(sv.root, happy and "heart" or "angry", 50, 110, 64, 64)
+	-- the guest waits for the last dish to land
+	ui.after(0.95, function()
+		local mood = ui.box(sv.root, "heart", 50, 110, 64, 64)
 		ui.pop(mood, 0.1, 1, 0.3)
 		gui.animate(mood, "position.y", 150, gui.EASING_OUTQUAD, 0.8)
 		gui.set_enabled(sv.bubble, false)
-		if happy then ui.hearts(sv.root, 0, 100, 4, 50) end
+		ui.hearts(sv.root, 0, 100, 4, 50)
+		gui.animate(sv.avatar, "euler.z", 7, gui.EASING_INOUTSINE, 0.14, 0, nil, gui.PLAYBACK_LOOP_PINGPONG)
 		local p = gui.get_position(sv.root)
-		gui.animate(sv.root, "position", V3(p.x, -180, 0), gui.EASING_INBACK, 0.4, 0.35, function()
+		gui.animate(sv.root, "position", V3(p.x, -180, 0), gui.EASING_INBACK, 0.4, 0.45, function()
 			sv.deleted = true
 			gui.delete_node(sv.root)
 		end)
-		if not happy then
-			audio.play("angry")
-			ui.shake(sv.avatar, 12)
-		end
+	end)
+end
+
+-- ---------------------------------------------------------------- display case
+
+-- the latest dishes stand on the shelves; a new one takes the spot of the oldest
+local function case_dish(i, food, appear)
+	local k = (i - 1) % #CASE_SLOTS + 1
+	local old = V.case_dishes[k]
+	if old then
+		gui.animate(old, "scale", V3(0.01, 0.01, 1), gui.EASING_INBACK, 0.18, 0, function() gui.delete_node(old) end)
 	end
-	-- a happy guest waits for the last dish to land
-	if happy then ui.after(0.95, go) else go() end
+	local sl = CASE_SLOTS[k]
+	local d = ui.box(V.case_shelf, food_sprite(food), sl[1], sl[2], 30, 30)
+	V.case_dishes[k] = d
+	if appear then ui.pop(d, 0.2, 1, 0.35, 0.1) end
+end
+
+local function build_case(parent, x, y)
+	V.case = ui.pane(parent, x, y)
+	V.case_icon = ui.box(V.case, "showcase", 0, 0, CASE_SIZE, CASE_SIZE)
+	-- dishes stand behind the glass
+	V.case_shelf = ui.pane(V.case, 0, 0, CASE_SIZE / 128)
+	V.case_dishes = {}
+	local foods = V.s.case_foods
+	for i = math.max(1, #foods - #CASE_SLOTS + 1), #foods do case_dish(i, foods[i], false) end
+	V.case_glass = ui.box(V.case, "showcase_glass", 0, 0, CASE_SIZE, CASE_SIZE)
+	local pill = ui.slice(V.case, "panel", 0, -64, 76, 38, PILL, 18)
+	V.case_count = ui.text(pill, tostring(V.s.showcase), 0, 1, 28)
+end
+
+-- a glint runs across the glass
+local function case_glint()
+	local g = ui.glow(ui.box(V.case, "glow", -50, 0, 60, 120, H("#ffffff", 0.75)))
+	gui.set_euler(g, V3(0, 0, -20))
+	gui.animate(g, "position.x", 50, gui.EASING_INOUTSINE, 0.35)
+	gui.animate(g, "color.w", 0, gui.EASING_INQUAD, 0.35, 0, function() gui.delete_node(g) end)
 end
 
 -- ---------------------------------------------------------------- HUD / toasts
@@ -348,7 +388,7 @@ local function banner(text, color)
 	local label = ui.text(p, text, 0, 6, 56)
 	ui.fit(label, V.R.board.w - 120, 56)
 	local w = math.min(V.R.board.w - 40, ui.text_width(label) * gui.get_scale(label).x + 120)
-	local rib = ui.slice(p, "btn", 0, 0, w, 112, color or ui.PINK, 34)
+	local rib = ui.slice(p, "btn", 0, 0, w, 112, color or ui.TEAL, 34)
 	gui.move_below(rib, label)
 	ui.burst(p, -w / 2, 0, 5, nil, 60)
 	ui.burst(p, w / 2, 0, 5, nil, 60)
@@ -431,7 +471,7 @@ local function build_gift(parent, x, y)
 	local g = { root = ui.pane(parent, x, y) }
 	g.rays = ui.glow(ui.box(g.root, "rays", 0, 0, 170, 170, H("#ffe08a", 0.7)))
 	gui.animate(g.rays, "euler.z", -360, gui.EASING_LINEAR, 8, 0, nil, gui.PLAYBACK_LOOP_FORWARD)
-	local base = ui.box(g.root, "btn_round", 0, 0, 84, 84, ui.PLUM)
+	local base = ui.box(g.root, "btn_round", 0, 0, 84, 84, ui.COCOA)
 	g.pie = gui.new_pie_node(V3(0, 4, 0), V3(76, 76, 0))
 	gui.set_parent(g.pie, g.root)
 	gui.set_inner_radius(g.pie, 30)
@@ -440,7 +480,7 @@ local function build_gift(parent, x, y)
 	gui.set_euler(g.pie, V3(0, 0, 90))
 	gui.set_color(g.pie, ui.GOLD)
 	g.icon = ui.box(g.root, "gift", 0, 6, 58, 58)
-	g.badge = ui.box(g.root, "btn_round", 30, 30, 34, 34, H("#ff4d6d"))
+	g.badge = ui.box(g.root, "btn_round", 30, 30, 34, 34, ui.CORAL)
 	ui.text(g.badge, "!", 0, 2, 26)
 	ui.button(base, 96, 96, function()
 		if progress.gift_ready() then
@@ -505,6 +545,7 @@ local function merge_and_fly(ids, food, delay, target_node, on_arrive, combo, go
 			local c = mid + V3(0, 12, 0)
 			local pitch = math.min(1.4, 1.0 + math.max(0, (combo or 1) - 1) * 0.07)
 			audio.play("match", 1.0, pitch)
+			ui.flash_light(V.fx, c.x, c.y, 260)
 			ui.ring(V.fx, c.x, c.y, 230, ui.WHITE, 0.42)
 			ui.burst(V.fx, c.x, c.y, 10, nil, 120)
 			if combo and combo >= 2 then
@@ -539,6 +580,10 @@ local handlers = {}
 handlers.to_slot = function(e)
 	local tv = V.tiles[e.id]
 	if not tv then return end
+	if e.from == "board" then
+		local p = fx_pos(tv.root)
+		ui.ring(V.fx, p.x, p.y + FACE_DY * V.board_scale, 150 * V.board_scale, H("#fff3d6"), 0.3)
+	end
 	gui.cancel_animations(tv.root)
 	gui.set_parent(tv.root, V.tray, true)
 	set_tile_color(tv, true, false)
@@ -598,24 +643,32 @@ handlers.slot = function()
 	relayout_tray(V.matched and 0.32 or 0)
 	update_progress()
 	local n = #V.s.slot
-	-- the tray pulses while it is nearly full
+	-- the tray breathes slowly while it is nearly full (a hint, not an alarm)
 	local pulsing = n >= 5 and V.s.status == "play"
 	if pulsing ~= V.tray_pulsing then
 		V.tray_pulsing = pulsing
 		gui.cancel_animations(V.tray, "scale")
 		gui.set_scale(V.tray, V3(V.R.tray.s, V.R.tray.s, 1))
-		if pulsing then ui.pulse(V.tray, 1.035, 0.25) end
+		if pulsing then ui.pulse(V.tray, 1.02, 0.5) end
 	end
 	if n >= 6 and V.s.status == "play" then
-		ui.shake(V.tray, 8)
-		gui.animate(V.tray_bg, "color", TRAY_DANGER, gui.EASING_OUTQUAD, 0.15)
+		gui.animate(V.tray_bg, "color", TRAY_DANGER, gui.EASING_OUTQUAD, 0.25)
 	elseif n == 5 and V.s.status == "play" then
-		gui.animate(V.tray_bg, "color", TRAY_WARN, gui.EASING_OUTQUAD, 0.15)
+		gui.animate(V.tray_bg, "color", TRAY_WARN, gui.EASING_OUTQUAD, 0.25)
 	else
-		gui.animate(V.tray_bg, "color", TRAY, gui.EASING_OUTQUAD, 0.2)
+		gui.animate(V.tray_bg, "color", TRAY, gui.EASING_OUTQUAD, 0.3)
 		if V.last_slot_count and V.last_slot_count >= 5 and n <= 4 then
 			ui.burst(V.tray, 0, 0, 10, nil, 160)
 		end
+	end
+	-- a clean tray: a light sweeps across it
+	if n == 0 and (V.last_slot_count or 0) >= 3 then
+		ui.after(0.35, function()
+			local half = config.SLOT_COUNT * TRAY_STEP / 2
+			local g = ui.glow(ui.box(V.tray, "glow", -half, 0, 180, 150, H("#ffffff", 0.55)))
+			gui.animate(g, "position.x", half, gui.EASING_INOUTSINE, 0.5)
+			gui.animate(g, "color.w", 0, gui.EASING_INQUAD, 0.5, 0, function() gui.delete_node(g) end)
+		end)
 	end
 	V.last_slot_count = n
 	if n >= config.SLOT_COUNT - 2 and V.s.status == "play" then
@@ -642,7 +695,11 @@ handlers.serve = function(e)
 		gui.set_color(item.icon, vmath.vector4(1, 1, 1, 0.45))
 		audio.play("serve")
 		local p = fx_pos(item.icon)
+		ui.flash_light(V.fx, p.x, p.y, 200)
 		ui.burst(V.fx, p.x, p.y, 8, nil, 80)
+		-- an order pays double: a golden stamp over the bubble
+		local stamp = ui.float_text(V.fx, "x2", p.x + 30, p.y - 4, 44, ui.GOLD, ui.INK, 22)
+		gui.set_euler(stamp, V3(0, 0, math.random(-12, 4)))
 		local a = fx_pos(sv.avatar)
 		ui.hearts(V.fx, a.x, a.y + 30, 2, 36)
 		hop(sv)
@@ -650,6 +707,7 @@ handlers.serve = function(e)
 		V.app.mission_check()
 	end, e.combo, e.gold)
 	if (e.combo or 0) >= 2 then tip_once("combo", i18n.get("TIP_COMBO"), "icon_fire") end
+	if V.s.level >= 2 then tip_once("order", i18n.get("TIP_ORDER"), "coin") end
 	if V.tutorial and not V.tutorial_served then
 		V.tutorial_served = true
 		ui.after(1.0, function()
@@ -661,19 +719,29 @@ handlers.serve = function(e)
 	end
 end
 
-handlers.waste = function(e)
+-- nobody ordered it: the dish goes on display and still pays
+handlers.showcase = function(e)
 	V.matched = true
-	merge_and_fly(e.ids, e.type, 0.2, V.bin_icon, function()
-		audio.play("waste")
-		ui.shake(V.bin_icon, 14)
-		gui.set_text(V.bin_count, tostring(V.s.waste))
-		ui.pop(V.bin_count, 1.6, 1, 0.3)
-	end, nil, e.gold)
-	tip_once("waste", i18n.get("TIP_WASTE"))
+	local i = #V.s.case_foods
+	merge_and_fly(e.ids, e.type, 0.2, V.case_icon, function()
+		audio.play("showcase")
+		case_dish(i, e.type, true)
+		case_glint()
+		ui.pop(V.case, 1.12, 1, 0.3)
+		local p = fx_pos(V.case_icon)
+		ui.flash_light(V.fx, p.x, p.y + 10, 240)
+		ui.burst(V.fx, p.x, p.y + 10, 8, nil, 90)
+		ui.float_text(V.fx, "+" .. e.coins, p.x + 46, p.y + 56, 36, ui.GOLD, ui.INK, 56)
+		fly_coins(p, e.coins)
+		gui.set_text(V.case_count, tostring(V.s.showcase))
+		ui.pop(V.case_count, 1.6, 1, 0.3)
+		V.app.mission_check()
+	end, e.combo, e.gold)
+	tip_once("showcase", i18n.get("TIP_SHOWCASE"), "showcase")
 end
 
 handlers.arrive = function(e)
-	if V.seats[e.seat] then leave_seat(e.seat, true) end
+	if V.seats[e.seat] then leave_seat(e.seat) end
 	local sv = build_seat(e.seat, V.s.seats[e.seat], true)
 	audio.play("arrive", 0.6)
 	if e.vip then
@@ -685,13 +753,18 @@ end
 
 handlers.leave = function(e)
 	local sv = V.seats[e.seat]
-	if e.happy and sv and e.coins > 0 then
+	if sv and e.coins > 0 then
+		-- the tip: bigger while the tip meter was still green
 		local avatar = sv.avatar
-		ui.after(0.9, function() fly_coins(fx_pos(avatar), e.coins) end)
+		ui.after(0.9, function()
+			local p = fx_pos(avatar)
+			ui.float_text(V.fx, "+" .. e.coins, p.x + 58, p.y + 10, e.full and 40 or 32, ui.GOLD, ui.INK, 34)
+			if e.full then ui.burst(V.fx, p.x, p.y + 40, 6, ui.GOLD, 70, 30) end
+			fly_coins(p, e.coins)
+		end)
 	end
-	if not e.happy then tip_once("angry", i18n.get("TIP_ANGRY")) end
-	leave_seat(e.seat, e.happy)
-	if e.happy then V.app.mission_check() end
+	leave_seat(e.seat)
+	V.app.mission_check()
 end
 
 handlers.blocked = function(e)
@@ -765,7 +838,7 @@ function M.process()
 	V.s.events = {}
 	V.matched = false
 	for _, e in ipairs(events) do
-		if e.e == "serve" or e.e == "waste" then V.matched = true end
+		if e.e == "serve" or e.e == "showcase" then V.matched = true end
 	end
 	for _, e in ipairs(events) do
 		local h = handlers[e.e]
@@ -780,9 +853,9 @@ local function build_background(vw, vh)
 	ui.box(V.root, "square", vw / 2, vh / 2, vw, vh, BG_BOTTOM)
 	ui.box(V.root, "grad", vw / 2, vh * 0.62, vw, vh * 0.76, BG_TOP)
 	local cell = 168
-	local pat = H("#ffffff", 0.32)
+	local pat = H("#ffffff", 0.3)
 	for y = cell / 2, vh + cell / 2, cell do
-		for x = cell / 2, vw + cell / 2, cell do ui.box(V.root, "pat_hearts", x, y, cell, cell, pat) end
+		for x = cell / 2, vw + cell / 2, cell do ui.box(V.root, "pat_beans", x, y, cell, cell, pat) end
 	end
 	ui.ambient(ui.pane(V.root, 0, 0), vw, vh, 12)
 end
@@ -805,7 +878,7 @@ local function build_board(R)
 
 	-- tablecloth with a soft shadow under the board
 	local cw, ch = math.min(R.board.w + 10, bw * scale + 56), math.min(R.board.h + 10, bh * scale + 46)
-	ui.slice(V.root, "panel", R.board.x, R.board.y - 10, cw + 6, ch, H("#c2507e", 0.16), 30)
+	ui.slice(V.root, "panel", R.board.x, R.board.y - 10, cw + 6, ch, H("#7a5235", 0.18), 30)
 	ui.slice(V.root, "cloth", R.board.x, R.board.y, cw, ch, ui.WHITE, 36)
 	V.board = ui.pane(V.root, R.board.x, R.board.y, scale)
 
@@ -832,7 +905,7 @@ local function booster_button(parent, kind, x, color, icon_name, label)
 	ui.icon(b, icon_name, 0, 4, 54)
 	local txt = ui.text(parent, i18n.get(label), x, -62, 22)
 	ui.fit(txt, 140, 22)
-	local badge = ui.box(b, "btn_round", 38, 38, 40, 40, H("#ff4d6d"))
+	local badge = ui.box(b, "btn_round", 38, 38, 40, 40, ui.CORAL)
 	local count = ui.text(badge, "0", 0, 2, 26)
 	local ad = ui.box(b, "btn_round", 38, 38, 44, 44, ui.GOLD)   -- Poki: rewarded buttons are never green
 	ui.icon(ad, "icon_ad", 0, 2, 28)
@@ -865,15 +938,15 @@ function M.build(app, parent)
 
 	-- shelf
 	V.shelf = ui.pane(V.root, R.shelf.x, R.shelf.y, R.shelf.s)
-	V.shelf_bg = ui.slice(V.shelf, "panel", 0, 0, 7 * SHELF_STEP + 20, 96, H("#c2507e", 0.18), 30)
+	V.shelf_bg = ui.slice(V.shelf, "panel", 0, 0, 7 * SHELF_STEP + 20, 96, H("#7a5235", 0.18), 30)
 	for i, id in ipairs(s.shelf) do make_tile(V.shelf, s.board.tiles[id], shelf_pos(i), SHELF_SCALE) end
 	gui.set_enabled(V.shelf_bg, #s.shelf > 0)
 
-	-- tray: a pink 3D slab with inset cells
+	-- tray: a teal 3D slab with inset cells
 	V.tray = ui.pane(V.root, R.tray.x, R.tray.y, R.tray.s)
 	V.tray_bg = ui.slice(V.tray, "btn", 0, 0, config.SLOT_COUNT * TRAY_STEP + 30, 132, TRAY, 34)
 	for i = 1, config.SLOT_COUNT do
-		ui.slice(V.tray, "cell", (i - 4) * TRAY_STEP, 4, 86, 100, H("#fff1f5"), 20)
+		ui.slice(V.tray, "cell", (i - 4) * TRAY_STEP, 4, 86, 100, H("#e3f3ef"), 20)
 	end
 	for i, id in ipairs(s.slot) do make_tile(V.tray, s.board.tiles[id], tray_pos(i), TRAY_SCALE) end
 	relayout_tray(0)
@@ -883,16 +956,14 @@ function M.build(app, parent)
 	ui.icon(V.combo_pill, "icon_fire", -50, 2, 34, ui.PEACH)
 	V.combo_text = ui.text(V.combo_pill, "x2", 6, 9, 28, ui.GOLD)
 	ui.slice(V.combo_pill, "bar", 18, -12, 100, 12, H("#000000", 0.3), 5)
-	V.combo_fill = ui.slice(V.combo_pill, "bar", -30, -12, 96, 10, ui.PINK, 5)
+	V.combo_fill = ui.slice(V.combo_pill, "bar", -30, -12, 96, 10, ui.ORANGE, 5)
 	gui.set_pivot(V.combo_fill, gui.PIVOT_W)
 	gui.set_enabled(V.combo_pill, false)
 	V.combo_shown = false
 
-	-- boosters + bin
+	-- boosters + the display case
 	local boost = ui.pane(V.root, R.boost.x, R.boost.y, R.boost.s)
-	V.bin_icon = ui.box(boost, "bin", -262, 12, 92, 92)
-	local pill = ui.slice(boost, "panel", -262, -50, 76, 38, PILL, 18)
-	V.bin_count = ui.text(pill, tostring(s.waste), 0, 1, 28)
+	build_case(boost, -262, 16)
 	-- boosters come in on level 2: the first level only teaches tap -> tray -> order
 	if s.level >= config.BOOSTERS_MIN_LEVEL then
 		booster_button(boost, "undo", -88, ui.BLUE, "icon_undo", "UNDO")
@@ -912,11 +983,11 @@ function M.build(app, parent)
 	V.coins_label = ui.text(cp, "", 18, 1, 32)
 	coins_text()
 	local lx = portrait and ((-half + 230) + (half - 100)) / 2 or 0
-	local lp = ui.slice(hud, "panel", lx, 0, 250, 66, s.params.hard and H("#c2304f", 0.92) or PILL, 30)
+	local lp = ui.slice(hud, "panel", lx, 0, 250, 66, s.params.hard and H("#d0533f", 0.92) or PILL, 30)
 	local lt = ui.text(lp, i18n.get("LEVEL", { n = s.level }), 0, 10, 30)
 	ui.fit(lt, 230, 30)
 	ui.slice(lp, "bar", 0, -18, 216, 16, H("#000000", 0.3), 6)
-	V.progress_fill = ui.slice(lp, "bar", -105, -18, 10, 12, ui.PINK, 5)
+	V.progress_fill = ui.slice(lp, "bar", -105, -18, 10, 12, ui.MINT, 5)
 	gui.set_pivot(V.progress_fill, gui.PIVOT_W)
 	update_progress()
 	if (progress.data.streak or 0) >= 2 then
@@ -943,7 +1014,7 @@ end
 
 function M.intro()
 	local s = V.s
-	if not V.tutorial then banner(i18n.get("LEVEL", { n = s.level }), s.params.hard and H("#ff5d73") or ui.PINK) end
+	if not V.tutorial then banner(i18n.get("LEVEL", { n = s.level }), s.params.hard and ui.CORAL or ui.TEAL) end
 	local food = levels.new_food(s.level)
 	local delay = 1.5
 	if food and not V.tutorial then
@@ -994,7 +1065,7 @@ end
 
 function M.update(dt)
 	if not V.s then return end
-	update_patience()
+	update_tips()
 	update_combo()
 	V.gift_t = V.gift_t + dt
 	if V.gift_t > 0.25 then

@@ -6,7 +6,7 @@ local levels = require "main.modules.levels"
 
 local M = {}
 
-M.KINDS = { "serve", "food", "levels", "stars3", "vip", "clean", "gold" }
+M.KINDS = { "serve", "food", "levels", "stars3", "vip", "showcase", "gold" }
 local BOOSTERS = { "undo", "shuffle", "rush" }
 
 -- goals grow with the number of finished missions (tier = done / 3)
@@ -17,7 +17,7 @@ local function goal_for(kind, tier)
 	if kind == "stars3" then return math.min(3, 1 + math.floor(tier / 3)) end
 	if kind == "vip" then return math.min(3, 1 + math.floor(tier / 3)) end
 	if kind == "gold" then return math.min(12, 3 + tier) end
-	return math.min(2, 1 + math.floor(tier / 4)) -- clean: levels won without waste
+	return math.min(12, 3 + tier) -- showcase: dishes nobody ordered, to the display case
 end
 
 local function new_mission(state, level)
@@ -43,6 +43,10 @@ function M.ensure(state, level)
 	state.list = state.list or {}
 	state.done = state.done or 0
 	state.serial = state.serial or 0
+	-- "levels without waste" left with the bin: old saves get a new task instead
+	for i = #state.list, 1, -1 do
+		if state.list[i].kind == "clean" then table.remove(state.list, i) end
+	end
 	while #state.list < config.MISSION_SLOTS do
 		state.list[#state.list + 1] = new_mission(state, level)
 	end
@@ -54,10 +58,10 @@ local function gain(m, r, live)
 	if m.kind == "food" then return (r.food_done and r.food_done[m.food]) or 0 end
 	if m.kind == "vip" then return r.vip_served or 0 end
 	if m.kind == "gold" then return r.gold_found or 0 end
+	if m.kind == "showcase" then return r.showcase or 0 end
 	if live then return 0 end
 	if m.kind == "levels" then return 1 end
 	if m.kind == "stars3" then return r.stars == 3 and 1 or 0 end
-	if m.kind == "clean" then return r.waste == 0 and 1 or 0 end
 	return 0
 end
 

@@ -12,8 +12,8 @@ local M = {}
 
 local V3 = vmath.vector3
 local H = ui.hex
-local PILL = H("#6b2f5c", 0.85)
-local ALERT = H("#ff4d6d")
+local PILL = H("#47362c", 0.85)
+local ALERT = ui.CORAL
 
 local function round_button(parent, x, y, size, color, icon, label, fn, max_label)
 	local b = ui.box(parent, "btn_round", x, y, size, size, color)
@@ -64,11 +64,11 @@ function M.build(app, parent)
 
 	-- title
 	local ty = vh - (portrait and 250 or 130)
-	-- a sticker title: plum drop shadow, pink letters with a white rim
+	-- a sticker title: roasted-brown drop shadow, warm orange letters with a white rim
 	local tsize = portrait and 108 or 100
 	local tpane = ui.pane(root, vw / 2, ty)
-	local shadow = ui.text(tpane, i18n.get("TITLE"), 0, -7, tsize, H("#b4467a"), H("#b4467a"))
-	local title = ui.text(tpane, i18n.get("TITLE"), 0, 0, tsize, H("#ff6fa8"), ui.WHITE)
+	local shadow = ui.text(tpane, i18n.get("TITLE"), 0, -7, tsize, H("#8a4b2a"), H("#8a4b2a"))
+	local title = ui.text(tpane, i18n.get("TITLE"), 0, 0, tsize, H("#ff9a3c"), ui.WHITE)
 	ui.fit(shadow, vw - 60, tsize)
 	ui.fit(title, vw - 60, tsize)
 	gui.animate(tpane, "position.y", ty + 8, gui.EASING_INOUTSINE, 1.4, 0, nil, gui.PLAYBACK_LOOP_PINGPONG)
@@ -92,7 +92,7 @@ function M.build(app, parent)
 	local lx, rx = portrait and 80 or 100, portrait and vw - 80 or vw - 100
 	local ready = progress.gift_ready()
 	local left = math.ceil((progress.gift_state()))
-	side_button(root, rx, sy, ui.PINK, "gift",
+	side_button(root, rx, sy, ui.TEAL, "gift",
 		ready and i18n.get("OPEN") or string.format("%d:%02d", math.floor(left / 60), left % 60), ready, function(ic)
 			if progress.gift_ready() then app.open_gift() else ui.shake(ic, 10) end
 		end)

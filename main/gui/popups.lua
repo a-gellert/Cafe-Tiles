@@ -19,14 +19,14 @@ local H = ui.hex
 
 local function frame(app, w, h, title, backdrop)
 	local root = ui.pane(app.popup_layer, 0, 0)
-	local dim = ui.box(root, "square", app.vw / 2, app.vh / 2, app.vw, app.vh, vmath.vector4(0.24, 0.07, 0.2, 0.55))
+	local dim = ui.box(root, "square", app.vw / 2, app.vh / 2, app.vw, app.vh, vmath.vector4(0.16, 0.11, 0.08, 0.55))
 	ui.fade(dim, 0, 0.55, 0.2)
 	if backdrop then backdrop(root) end
 	local s = math.min(1, (app.vw - 30) / w, (app.vh - 80) / (h + 60))
 	local panel = ui.pane(root, app.vw / 2, app.vh / 2 - 20 * s, s)
 	ui.slice(panel, "frame", 0, 0, w, h, ui.CREAM, 34)
 	if title then
-		local rib = ui.slice(panel, "btn", 0, h / 2, math.min(w * 0.82, 470), 86, ui.PINK, 34)
+		local rib = ui.slice(panel, "btn", 0, h / 2, math.min(w * 0.82, 470), 86, ui.TEAL, 34)
 		local t = ui.text(rib, title, 0, 6, 42)
 		ui.fit(t, math.min(w * 0.82, 470) - 50, 42)
 	end
@@ -57,7 +57,7 @@ local function round(parent, x, y, size, color, icon, fn)
 end
 
 local function close_button(app, panel, w, h)
-	round(panel, w / 2 - 18, h / 2 - 10, 76, H("#ff4d6d"), "icon_close", function() app.dismiss() end)
+	round(panel, w / 2 - 18, h / 2 - 10, 76, ui.CORAL, "icon_close", function() app.dismiss() end)
 end
 
 local function audio_toggles(app, panel, y)
@@ -101,7 +101,7 @@ builders.win = function(app, data)
 	local w, h = 560, (offer_x2 and y_x2 or y_cont) + 72
 	local top = h / 2
 	local root, panel = frame(app, w, h, i18n.get("LEVEL_DONE"), function(r)
-		local rays = ui.glow(ui.box(r, "rays", app.vw / 2, app.vh / 2 + 100, 1000, 1000, H("#ffb3d1", 0.5)))
+		local rays = ui.glow(ui.box(r, "rays", app.vw / 2, app.vh / 2 + 100, 1000, 1000, H("#ffe2a8", 0.5)))
 		gui.animate(rays, "euler.z", -360, gui.EASING_LINEAR, 24, 0, nil, gui.PLAYBACK_LOOP_FORWARD)
 		if not data.shown then ui.confetti(r, app.vw, app.vh, 60) end
 	end)
@@ -111,7 +111,7 @@ builders.win = function(app, data)
 
 	for i = 1, 3 do
 		local x, y, size = (i - 2) * 140, top - 145 + (i == 2 and 22 or 0), i == 2 and 150 or 120
-		local st = ui.box(panel, "star", x, y, size, size, i <= r.stars and ui.WHITE or H("#8a6b80", 0.4))
+		local st = ui.box(panel, "star", x, y, size, size, i <= r.stars and ui.WHITE or H("#8a7a6b", 0.4))
 		if i <= r.stars then
 			gui.set_scale(st, V3(0.01, 0.01, 1))
 			ui.after(0.25 + i * 0.3, function()
@@ -133,7 +133,7 @@ builders.win = function(app, data)
 	end
 
 	local total = r.doubled and r.coins * 2 or r.coins
-	local cp = ui.slice(panel, "panel", 0, top - y_coins, 300, 78, H("#6b2f5c", 0.85), 32)
+	local cp = ui.slice(panel, "panel", 0, top - y_coins, 300, 78, H("#47362c", 0.85), 32)
 	ui.box(cp, "coin", -100, 0, 62, 62)
 	local ct = ui.text(cp, "+" .. (first and 0 or total), 30, 2, 46, ui.GOLD)
 	ui.pop(cp, 0.5, 1, 0.3, 0.2)
@@ -148,9 +148,9 @@ builders.win = function(app, data)
 	local before = first and progress.data.coins - total - (r.missions and r.missions.coins or 0) or nil
 	local goal = meta_view.goal_bar(panel, 0, top - y_stats, 460, before, function() app.open_child("decor") end)
 	if not goal then
-		local stats = { { "heart", r.served }, { "bin", r.waste }, { "angry", r.angry } }
+		local stats = { { "heart", r.served }, { "showcase", r.showcase or 0 } }
 		for i, st in ipairs(stats) do
-			local x = (i - 2) * 150
+			local x = (i - 1.5) * 170
 			ui.icon(panel, st[1], x - 30, top - y_stats, 48)
 			ui.text(panel, tostring(st[2]), x + 22, top - y_stats + 2, 34, ui.WHITE)
 		end
@@ -161,7 +161,7 @@ builders.win = function(app, data)
 		local cur_chest, goal_chest = progress.star_chest_progress()
 		local can_open = progress.can_open_star_chest()
 		local chest_y = top - y_chest
-		local chest_p = ui.slice(panel, "panel", can_open and -65 or 0, chest_y, can_open and 320 or 440, 56, H("#6b2f5c", 0.9), 24)
+		local chest_p = ui.slice(panel, "panel", can_open and -65 or 0, chest_y, can_open and 320 or 440, 56, H("#47362c", 0.9), 24)
 		ui.icon(chest_p, "icon_chest", can_open and -120 or -180, 0, 40)
 		local chest_txt = ui.text(chest_p, i18n.get("STAR_CHEST") .. "  " .. cur_chest .. "/" .. goal_chest, 10, 1, 24, ui.GOLD)
 		ui.fit(chest_txt, can_open and 220 or 320, 24)
@@ -179,7 +179,7 @@ builders.win = function(app, data)
 	-- a decor item is affordable: offer it right here, the decor popup returns to this one
 	if progress.can_decorate() then
 		local d = round(panel, -190, cont_y, 92, ui.PURPLE, "icon_brush", function() app.open_child("decor") end)
-		local badge = ui.box(d, "btn_round", 32, 32, 36, 36, H("#ff4d6d"))
+		local badge = ui.box(d, "btn_round", 32, 32, 36, 36, ui.CORAL)
 		ui.text(badge, "!", 0, 2, 26)
 		ui.pulse(d, 1.1, 0.5)
 	else
@@ -201,7 +201,7 @@ builders.chest = function(app, data)
 	local cafe_level = data and data.cafe_level
 	local title = cafe_level and "CAFE_LEVEL_UP" or (gift and "GIFT" or "STAR_CHEST")
 	local root, panel = frame(app, w, h, i18n.get(title), function(r)
-		local rays = ui.glow(ui.box(r, "rays", app.vw / 2, app.vh / 2 + 70, 950, 950, H("#ffd6e8", 0.55)))
+		local rays = ui.glow(ui.box(r, "rays", app.vw / 2, app.vh / 2 + 70, 950, 950, H("#ffe9c2", 0.55)))
 		gui.animate(rays, "euler.z", -360, gui.EASING_LINEAR, 20, 0, nil, gui.PLAYBACK_LOOP_FORWARD)
 		if data and not data.shown then ui.confetti(r, app.vw, app.vh, 40) end
 	end)
@@ -215,7 +215,7 @@ builders.chest = function(app, data)
 	local reward = data
 	if reward then
 		-- Reward 1: Coins
-		local r1 = ui.slice(panel, "panel", -105, -45, 185, 78, H("#6b2f5c", 0.9), 28)
+		local r1 = ui.slice(panel, "panel", -105, -45, 185, 78, H("#47362c", 0.9), 28)
 		ui.box(r1, "coin", -52, 0, 56, 56)
 		ui.text(r1, "+" .. reward.coins, 25, 2, 38, ui.GOLD)
 		ui.pop(r1, 0.2, 1, 0.35, 0.15)
@@ -225,7 +225,7 @@ builders.chest = function(app, data)
 			local icon_name = (reward.booster == "undo" and "icon_undo")
 				or (reward.booster == "shuffle" and "icon_shuffle")
 				or "icon_bolt"
-			local r2 = ui.slice(panel, "panel", 105, -45, 185, 78, H("#6b2f5c", 0.9), 28)
+			local r2 = ui.slice(panel, "panel", 105, -45, 185, 78, H("#47362c", 0.9), 28)
 			ui.icon(r2, icon_name, -50, 0, 50)
 			ui.text(r2, "+1", 25, 2, 38, ui.WHITE)
 			ui.pop(r2, 0.2, 1, 0.35, 0.3)
@@ -259,8 +259,9 @@ builders.jam = function(app)
 	local w, h = 540, y_bottom + 70
 	local top = h / 2
 	local root, panel = frame(app, w, h, i18n.get("JAM"))
-	local face = ui.box(panel, "angry", 0, top - 160, 120, 120)
-	ui.shake(face, 15)
+	-- the cloche wobbles: a full tray, nothing more dramatic
+	local face = ui.box(panel, "cloche", 0, top - 160, 130, 120)
+	ui.shake(face, 10)
 	local t = ui.text(panel, i18n.get("JAM_DESC"), 0, top - 254, 36, ui.INK, ui.CREAM)
 	ui.fit(t, w - 80, 36)
 	local main
@@ -298,8 +299,8 @@ end
 
 -- soft badge colors behind the item samples
 local DECOR_BADGE = {
-	wall = H("#ffd9e6"), counter = H("#ffe7cf"), flowers = H("#ffe0f0"), lights = H("#fff1c4"),
-	plants = H("#d8f5e6"), floor = H("#f3e3d6"), kitchen = H("#e9ddff"),
+	wall = H("#f3e3cc"), counter = H("#ffe7cf"), flowers = H("#fde2d5"), lights = H("#fff1c4"),
+	plants = H("#d8f0e2"), floor = H("#efe1d2"), kitchen = H("#e2ecf3"),
 }
 
 local function decor_card(app, panel, it, x, y, cw, ch, highlight)
@@ -307,16 +308,16 @@ local function decor_card(app, panel, it, x, y, cw, ch, highlight)
 	local tier = decor.tier(owned, it.id)
 	local price = decor.next_price(owned, it.id)
 	local afford = price ~= nil and progress.data.coins >= price
-	ui.slice(panel, "panel", x, y - 6, cw, ch, H("#d77fa3", 0.35), 30)
-	local card = ui.slice(panel, "panel", x, y, cw, ch, (not price and H("#fff4d6")) or (afford and ui.WHITE) or H("#fbeef3"), 30)
-	local badge = ui.box(card, "btn_round", -cw / 2 + 60, 4, 96, 96, DECOR_BADGE[it.id] or ui.ROSE)
+	ui.slice(panel, "panel", x, y - 6, cw, ch, H("#b08a6a", 0.35), 30)
+	local card = ui.slice(panel, "panel", x, y, cw, ch, (not price and H("#fff4d6")) or (afford and ui.WHITE) or H("#f6efe6"), 30)
+	local badge = ui.box(card, "btn_round", -cw / 2 + 60, 4, 96, 96, DECOR_BADGE[it.id] or ui.CREAM)
 	-- the sample shows what the next tier brings (the last one when maxed)
 	cafe_view.swatch(badge, it.id, math.min(tier + 1, decor.MAX_TIER), 0, 4, 62)
 	local name = ui.text(card, i18n.get("DECOR_" .. it.id), -cw / 2 + 118, 36, 26, ui.INK, ui.CREAM)
 	gui.set_pivot(name, gui.PIVOT_W)
 	ui.fit(name, cw - 130, 26)
 	for p = 1, decor.MAX_TIER do
-		ui.box(card, "star", -cw / 2 + 134 + (p - 1) * 32, 0, 30, 30, p <= tier and ui.WHITE or H("#8a6b80", 0.3))
+		ui.box(card, "star", -cw / 2 + 134 + (p - 1) * 32, 0, 30, 30, p <= tier and ui.WHITE or H("#8a7a6b", 0.3))
 	end
 	if price then
 		local b = ui.slice(card, "btn", cw / 2 - 78, -ch / 2 + 32, 136, 52, afford and ui.GREEN or ui.GREY, 24)
@@ -373,7 +374,7 @@ builders.decor = function(app, data)
 	end
 	local cv = meta_view.preview(panel, px, py, pw, ph)
 	meta_view.level_badge(panel, gx, info_y, grid_w)
-	local cp = ui.slice(panel, "panel", coins_x, coins_y, 220, 58, H("#6b2f5c", 0.85), 28)
+	local cp = ui.slice(panel, "panel", coins_x, coins_y, 220, 58, H("#47362c", 0.85), 28)
 	ui.box(cp, "coin", -72, 0, 50, 50)
 	local ct = ui.text(cp, tostring(progress.data.coins), 18, 1, 32)
 	ui.fit(ct, 120, 32)
@@ -393,7 +394,7 @@ builders.decor = function(app, data)
 		local t = cafe_view.reveal(cv, just)
 		ui.confetti(root, app.vw, app.vh, 36)
 		ui.after(0.2, function()
-			ui.float_text(panel, i18n.get("NEW_LOOK"), px, py + ph / 2 - 60, 56, H("#ff6fa8"), ui.WHITE, 90)
+			ui.float_text(panel, i18n.get("NEW_LOOK"), px, py + ph / 2 - 60, 56, ui.ORANGE, ui.WHITE, 90)
 		end)
 		if levelup then
 			ui.after(t + 0.5, function()
@@ -407,7 +408,7 @@ end
 
 -- Chef's tasks. data = report from missions.apply (after a win, animated, Continue goes on)
 -- or nil (from menu / pause: current state, close button).
-local KIND_ICON = { serve = "heart", levels = "icon_play", stars3 = "star", vip = "crown", clean = "bin", gold = "tile_gold" }
+local KIND_ICON = { serve = "heart", levels = "icon_play", stars3 = "star", vip = "crown", showcase = "showcase", gold = "tile_gold" }
 
 builders.missions = function(app, data)
 	local after_win = data ~= nil
@@ -417,7 +418,7 @@ builders.missions = function(app, data)
 	if not after_win then close_button(app, panel, w, h) end
 	for i, r in ipairs(rows) do
 		local y = h / 2 - 110 - (i - 1) * 120
-		ui.slice(panel, "panel", 0, y, w - 50, 106, r.done and H("#d6f5e6") or H("#ffe6ee"), 30)
+		ui.slice(panel, "panel", 0, y, w - 50, 106, r.done and H("#d6f5e6") or H("#fbefe2"), 30)
 		local icon = r.kind == "food" and ("food_" .. config.FOOD[r.food]) or KIND_ICON[r.kind]
 		ui.icon(panel, icon, -w / 2 + 72, y, 64, r.kind == "levels" and ui.ORANGE or nil)
 		local name = ui.text(panel, i18n.get("MISSION_" .. r.kind, { n = r.goal }), -w / 2 + 116, y + 22, 26, ui.INK, ui.CREAM)
@@ -425,7 +426,7 @@ builders.missions = function(app, data)
 		ui.fit(name, 290, 26)
 		-- progress bar
 		local bw = 250
-		ui.slice(panel, "bar", -w / 2 + 116 + bw / 2, y - 18, bw, 24, H("#6b2f5c", 0.22), 10)
+		ui.slice(panel, "bar", -w / 2 + 116 + bw / 2, y - 18, bw, 24, H("#47362c", 0.2), 10)
 		local fill = ui.slice(panel, "bar", -w / 2 + 116, y - 18, math.max(16, bw * r.from / r.goal), 20, r.done and ui.GREEN or ui.GOLD, 9)
 		gui.set_pivot(fill, gui.PIVOT_W)
 		local label = ui.text(panel, r.from .. "/" .. r.goal, -w / 2 + 116 + bw / 2, y - 17, 20, ui.WHITE)
