@@ -37,6 +37,7 @@ M.CANDY = { M.hex("#ffd23f"), M.hex("#ff8fbf"), M.hex("#ffffff"), M.hex("#9fe8ff
 
 -- generation counter: delayed callbacks from a torn-down screen are dropped
 M.gen = 0
+M.popup_gen = 0     -- bumped when a popup closes (app.close_popup)
 M.buttons = {}
 M.layer = "screen"
 
@@ -186,10 +187,14 @@ end
 
 -- ---------------------------------------------------------------- tweens & fx
 
+-- Runs fn later unless the screen was rebuilt meanwhile. Callbacks made while a popup is
+-- built die with that popup too: a popup closes without a rebuild (Continue -> tasks,
+-- x2, a child popup), and its nodes are gone (Poki error reports: "Deleted node" in pop).
 function M.after(delay, fn)
 	local g = M.gen
+	local pg = M.layer == "popup" and M.popup_gen
 	timer.delay(delay, false, function()
-		if g == M.gen then fn() end
+		if g == M.gen and (not pg or pg == M.popup_gen) then fn() end
 	end)
 end
 

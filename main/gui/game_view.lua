@@ -359,11 +359,19 @@ local function banner(text, color)
 	end)
 end
 
-local HINT_IDLE = 12
+-- seconds without a tap before the hint hand shows: almost at once when the tray fills up
+-- (casual players jam far less when they see the safe tile, see tools/sim_casual.lua)
+local function hint_delay()
+	local s = V.s
+	if #s.slot >= config.ASSIST_TRAY then
+		return s.level <= config.ASSIST_LEVEL and config.ASSIST_DELAY or config.ASSIST_DELAY_LATE
+	end
+	return s.level <= 5 and config.HINT_IDLE_EARLY or config.HINT_IDLE
+end
 
 local function update_hand()
 	if not V.hand then return end
-	local id = (V.tutorial or V.idle >= HINT_IDLE) and V.s.status == "play" and session.suggest(V.s)
+	local id = (V.tutorial or V.idle >= hint_delay()) and V.s.status == "play" and session.suggest(V.s)
 	if not id then
 		gui.set_enabled(V.hand, false)
 		return
@@ -747,7 +755,8 @@ handlers.won = function()
 end
 
 handlers.jam = function()
-	audio.play("lose")
+	-- the free rescue follows at once on early levels: no losing sound there
+	audio.play(session.can_second_chance(V.s, "free") and "blocked" or "lose")
 	V.app.on_jam_soon()
 end
 
@@ -790,7 +799,8 @@ local function build_board(R)
 	V.lift_mid = maxz * LIFT / 2
 	local bw = (maxx - minx) * STEP_X + TILE_W + maxz * 2
 	local bh = (maxy - miny) * STEP_Y + TILE_H + maxz * LIFT
-	local scale = math.min(R.board.w / bw, R.board.h / bh, 1.3)
+	-- small early boards get big, easy-to-hit tiles
+	local scale = math.min(R.board.w / bw, R.board.h / bh, 1.6)
 	V.board_scale = scale
 
 	-- tablecloth with a soft shadow under the board
@@ -824,7 +834,7 @@ local function booster_button(parent, kind, x, color, icon_name, label)
 	ui.fit(txt, 140, 22)
 	local badge = ui.box(b, "btn_round", 38, 38, 40, 40, H("#ff4d6d"))
 	local count = ui.text(badge, "0", 0, 2, 26)
-	local ad = ui.box(b, "btn_round", 38, 38, 44, 44, ui.GREEN)
+	local ad = ui.box(b, "btn_round", 38, 38, 44, 44, ui.GOLD)   -- Poki: rewarded buttons are never green
 	ui.icon(ad, "icon_ad", 0, 2, 28)
 	V.boosters[kind] = { node = b, badge = badge, count = count, ad = ad }
 	ui.button(b, 110, 110, function() V.app.use_booster(kind) end, { silent = true })
@@ -883,10 +893,13 @@ function M.build(app, parent)
 	V.bin_icon = ui.box(boost, "bin", -262, 12, 92, 92)
 	local pill = ui.slice(boost, "panel", -262, -50, 76, 38, PILL, 18)
 	V.bin_count = ui.text(pill, tostring(s.waste), 0, 1, 28)
-	booster_button(boost, "undo", -88, ui.BLUE, "icon_undo", "UNDO")
-	booster_button(boost, "shuffle", 72, ui.PURPLE, "icon_shuffle", "SHUFFLE")
-	booster_button(boost, "rush", 232, ui.PEACH, "icon_bolt", "RUSH")
-	update_boosters()
+	-- boosters come in on level 2: the first level only teaches tap -> tray -> order
+	if s.level >= config.BOOSTERS_MIN_LEVEL then
+		booster_button(boost, "undo", -88, ui.BLUE, "icon_undo", "UNDO")
+		booster_button(boost, "shuffle", 72, ui.PURPLE, "icon_shuffle", "SHUFFLE")
+		booster_button(boost, "rush", 232, ui.PEACH, "icon_bolt", "RUSH")
+		update_boosters()
+	end
 
 	-- HUD
 	local hud = ui.pane(V.root, vw / 2, R.hud_y)
@@ -944,6 +957,11 @@ function M.intro()
 	-- first golden tiles: explain once
 	if s.level >= config.GOLD_MIN_LEVEL and not progress.tip_seen("gold") then
 		ui.after(delay, function() tip_once("gold", i18n.get("TIP_GOLD"), "coin") end)
+	elseif s.level >= config.BOOSTERS_MIN_LEVEL and not progress.tip_seen("boosters") then
+		ui.after(delay, function()
+			for _, b in pairs(V.boosters) do ui.pop(b.node, 0.3, 1, 0.4) end
+			tip_once("boosters", i18n.get("TIP_BOOSTERS"), "icon_bolt")
+		end)
 	end
 end
 
@@ -986,7 +1004,8 @@ function M.update(dt)
 	if V.s.status == "play" and not V.tutorial then
 		local before = V.idle
 		V.idle = V.idle + dt
-		if before < HINT_IDLE and V.idle >= HINT_IDLE then update_hand() end
+		local need = hint_delay()
+		if before < need and V.idle >= need then update_hand() end
 	end
 end
 

@@ -25,6 +25,7 @@ local function defaults()
 		missions = { list = {}, done = 0, serial = 0 },
 		star_chest = 0,
 		streak = 0,
+		cafe_level = 1,     -- highest cafe level whose reward was paid
 	}
 end
 
@@ -50,6 +51,8 @@ function M.load(fresh)
 		local ok, saved = pcall(sys.load, save_path())
 		if ok and type(saved) == "table" and saved.version then merge(d, saved) end
 	end
+	-- saves from before cafe levels: no rewards for levels reached back then
+	d.cafe_level = math.max(d.cafe_level, decor.cafe_level(d.decor))
 	M.data = d
 end
 
@@ -65,13 +68,24 @@ function M.add_coins(n)
 	M.data.coins = M.data.coins + n
 end
 
+-- Returns true and, when the purchase reached a new cafe level, its reward
+-- ({ coins, booster, cafe_level }). The reward is credited here, in the same save.
 function M.buy_decor(id)
 	local price = decor.next_price(M.data.decor, id)
 	if not price or M.data.coins < price then return false end
 	M.data.coins = M.data.coins - price
 	M.data.decor[id] = decor.tier(M.data.decor, id) + 1
+	local reward
+	local lvl = decor.cafe_level(M.data.decor)
+	if lvl > M.data.cafe_level then
+		M.data.cafe_level = lvl
+		reward = decor.level_reward(lvl)
+		reward.cafe_level = lvl
+		M.add_coins(reward.coins)
+		M.data.boosters[reward.booster] = (M.data.boosters[reward.booster] or 0) + 1
+	end
 	M.save()
-	return true
+	return true, reward
 end
 
 function M.can_decorate()

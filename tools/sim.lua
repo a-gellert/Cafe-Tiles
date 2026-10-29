@@ -2,7 +2,7 @@
 -- usage (from the project root, LuaJIT from the Defold editor):
 --   luajit-64.exe tools/sim.lua [first_level] [last_level] [seconds_per_tap]
 -- "min" = estimated session minutes (taps * seconds_per_tap + LEVEL_OVERHEAD per level),
--- "tasks" = chef's tasks finished on that level, "2nd" = ad chances + coin continues,
+-- "tasks" = chef's tasks finished on that level, "2nd" = free rescues + ad chances + coin continues,
 -- "cmb" = best combo, "cc" = combo coins, "gold" = golden tiles found, "gifts" = session gifts so far.
 package.path = "./?.lua;" .. package.path
 
@@ -52,7 +52,10 @@ for level = first, last do
 		if s.status == "won" then outcome = "won" break end
 		if s.status == "jam" then
 			local cost = config.CONTINUE_COST_BASE + config.CONTINUE_COST_PER_LEVEL * level
-			if session.can_second_chance(s) then
+			if session.can_second_chance(s, "free") then
+				session.second_chance(s, "free")
+				used = used + 1
+			elseif session.can_second_chance(s) then
 				session.second_chance(s)
 				used = used + 1
 			elseif session.can_second_chance(s, true) and wallet >= cost then
@@ -75,6 +78,9 @@ for level = first, last do
 	local finished = 0
 	if outcome == "won" then
 		wallet = wallet + r.coins
+	end
+	-- tasks count from config.REVEAL_LEVEL, as in the game
+	if outcome == "won" and level >= config.REVEAL_LEVEL then
 		missions.ensure(mstate, level)
 		local rep = missions.apply(mstate, level, r)
 		wallet = wallet + rep.coins

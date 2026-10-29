@@ -18,6 +18,8 @@ local BACK = hash("back")
 local UNDO = hash("undo")
 
 local AUTO_STEP = 0.32
+-- page-session minutes reported to Poki analytics (where do first sessions end?)
+local TIME_MARKS = { 1, 2, 3, 4, 5, 7, 10, 15, 20, 30 }
 
 local app = {}
 
@@ -67,6 +69,7 @@ end
 
 function app.close_popup()
 	if app.popup_root then gui.delete_node(app.popup_root) end
+	ui.popup_gen = ui.popup_gen + 1
 	app.popup_root = nil
 	app.popup = nil
 	app.pressed = nil
@@ -172,18 +175,22 @@ function app.retry()
 end
 
 -- Not ui.after: a resize rebuild must not cancel the result popup.
+-- A popup opened meanwhile (a gift from the HUD) only postpones fn, the level must not get stuck.
 local function later(delay, s, status, fn)
 	timer.delay(delay, false, function()
-		if app.session == s and s.status == status and not app.popup and app.screen == "game" then fn() end
+		if app.session ~= s or s.status ~= status or app.screen ~= "game" then return end
+		if app.popup then later(0.3, s, status, fn) else fn() end
 	end)
 end
 
 function app.on_won_soon()
 	local s = app.session
-	later(1.3, s, "won", function()
+	later(1.1, s, "won", function()
 		local r = session.result(s)
 		progress.finish_level(s.level, r.stars, r.coins)
-		local rep = missions.apply(progress.data.missions, s.level, r)
+		-- tasks start counting once the player knows the basics
+		local rep = s.level >= config.REVEAL_LEVEL and missions.apply(progress.data.missions, s.level, r)
+			or { rows = {}, coins = 0, boosters = {}, changed = false }
 		progress.add_coins(rep.coins)
 		for kind, n in pairs(rep.boosters) do
 			progress.data.boosters[kind] = (progress.data.boosters[kind] or 0) + n
@@ -199,6 +206,18 @@ function app.on_won_soon()
 end
 
 function app.on_jam_soon()
+	local s = app.session
+	-- early levels: the chef makes room on the shelf, no popup (players learn without losing)
+	if session.can_second_chance(s, "free") then
+		later(0.45, s, "jam", function()
+			session.second_chance(s, "free")
+			poki.measure("level", s.level, "rescue")
+			log("level", s.level, "free rescue")
+			game_view.process()
+			game_view.toast(i18n.get("RESCUE"), "icon_bolt", 2.6)
+		end)
+		return
+	end
 	later(0.7, app.session, "jam", function()
 		poki.gameplay_stop()
 		log("level", app.session.level, "jam", "chances left", app.session.chances)
@@ -206,11 +225,18 @@ function app.on_jam_soon()
 	end)
 end
 
--- after a win: the tasks screen first when the level moved a task forward
+-- after a win: the tasks screen first when the level finished a task (its reward is shown there)
+local function finished_task(rep)
+	for _, row in ipairs(rep.rows) do
+		if row.done then return true end
+	end
+	return false
+end
+
 function app.next_level()
 	local p = app.popup
 	local rep = p and p.kind == "win" and p.data and p.data.missions
-	if rep and rep.changed and not rep.shown then
+	if rep and finished_task(rep) and not rep.shown then
 		rep.shown = true
 		app.open_popup("missions", rep)
 		return
@@ -221,7 +247,7 @@ end
 -- in-game toast when the running level finishes a task
 function app.mission_check()
 	local s = app.session
-	if not s then return end
+	if not s or s.level < config.REVEAL_LEVEL then return end
 	local done = missions.live_done(progress.data.missions, { served = s.served, food_done = s.food_done, vip_served = s.vip_served })
 	for _, i in ipairs(done) do
 		if not app.announced[i] then
@@ -281,7 +307,7 @@ end
 
 function app.use_booster(kind)
 	local s = app.session
-	if not s or app.popup then return end
+	if not s or app.popup or s.level < config.BOOSTERS_MIN_LEVEL then return end
 	local can = (kind == "undo" and session.can_undo(s)) or (kind == "shuffle" and session.can_shuffle(s))
 		or (kind == "rush" and session.can_rush(s))
 	if not can then
@@ -308,15 +334,23 @@ end
 
 -- ---------------------------------------------------------------- menu actions
 
+-- the decor popup reveals the purchase in its cafe preview, then shows a cafe level reward
 function app.buy_decor(id)
-	if progress.buy_decor(id) then
-		poki.measure("cosmetic", id, "unlock-" .. (progress.data.decor[id] or 0))
-		audio.play("serve")
-		app.rebuild()
-		ui.burst(app.popup_layer, app.vw / 2, app.vh / 2, 14, ui.GOLD, 260, 48)
-	else
+	local ok, levelup = progress.buy_decor(id)
+	if not ok then
 		audio.play("blocked")
+		return
 	end
+	poki.measure("cosmetic", id, "unlock-" .. (progress.data.decor[id] or 0))
+	if levelup then poki.measure("cosmetic", "cafe-level", "unlock-" .. levelup.cafe_level) end
+	audio.play("gift")
+	local p = app.popup
+	if p and p.kind == "decor" then
+		p.data = p.data or {}
+		p.data.just, p.data.levelup = id, levelup
+	end
+	-- the menu cafe (or the game strip) behind the popup changes too
+	app.rebuild()
 end
 
 function app.set_audio(sound_on, music_on)
@@ -385,18 +419,20 @@ function init(self)
 	app.dh = sys.get_config_int("display.height", 960)
 	update_size()
 	app.resize_t = nil
-	-- first session goes straight into the tutorial level
-	if progress.data.level <= 1 then
-		app.start_level(1, true)
-	else
-		app.show_menu()
-	end
-	-- visual QA: open a popup right away (cafe.debug_popup = win | jam | pause | decor | settings | gift)
+	-- straight into gameplay (Poki: no menus before playing); the cafe menu is one tap away
+	app.start_level(progress.data.level, true)
+	app.time_mark = 1
+	-- visual QA: open a screen or popup right away
+	-- (cafe.debug_popup = menu | win | jam | pause | decor | settings | gift | levelup)
 	local dp = sys.get_config_string("cafe.debug_popup", "")
 	if dp ~= "" then
-		if dp ~= "decor" and dp ~= "settings" then app.start_level(progress.data.level, true) end
+		if dp == "menu" or dp == "decor" or dp == "settings" or dp == "levelup" then app.show_menu() end
 		if dp == "jam" then app.session.status = "jam" end
-		if dp == "gift" then
+		if dp == "menu" then
+			-- the menu itself
+		elseif dp == "levelup" then
+			app.open_popup("chest", { coins = 120, booster = "shuffle", cafe_level = 3 })
+		elseif dp == "gift" then
 			app.open_popup("chest", { coins = 25, booster = "rush", gift = true })
 		else
 			app.open_popup(dp, dp == "win" and { stars = 3, coins = 128, earned = 92, bonus = 36, waste = 0, angry = 0, served = 9, streak = 2 } or nil)
@@ -405,7 +441,12 @@ function init(self)
 end
 
 function update(self, dt)
-	poki.update(dt)
+	app.page_time = (app.page_time or 0) + dt
+	local mark = TIME_MARKS[app.time_mark or 1]
+	if mark and app.page_time >= mark * 60 then
+		app.time_mark = (app.time_mark or 1) + 1
+		poki.measure("playtime", mark, "minutes")
+	end
 	audio.update(dt)
 	if update_size() then app.resize_t = 0.12 end
 	if app.resize_t then

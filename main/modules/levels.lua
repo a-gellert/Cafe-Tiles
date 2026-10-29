@@ -37,10 +37,12 @@ function M.get(n)
 		if hard then triples = triples + 4 end
 		if step == 0 then triples = triples - 3 end
 		p = {
-			types = clamp(5 + math.floor((n - 1) / 4), 5, math.min(M.MAX_TYPES, #config.FOOD)),
+			-- a new dish every 5 levels, 3 open triples on hard levels from 10 and everywhere from 25:
+			-- casual players (tools/sim_casual.lua) no longer hit a wall around level 13
+			types = clamp(5 + math.floor((n - 1) / 5), 5, math.min(M.MAX_TYPES, #config.FOOD)),
 			triples = clamp(triples, 10, M.MAX_TRIPLES),
 			layers = clamp(2 + math.floor((n + 2) / 4), 3, 7),
-			open = (hard and n >= 5 or n >= 15) and 3 or 2,
+			open = (hard and n >= 10 or n >= 25) and 3 or 2,
 			items_min = 1,
 			items_max = n < 10 and 2 or 3,
 			patience_per_item = math.max(34, 56 - n * 0.4),

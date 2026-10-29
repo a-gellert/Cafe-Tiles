@@ -4,11 +4,10 @@ local M = {}
 
 local gameplay = false
 local ad_active = false
-local clock = 0
-local last_rewarded = -1000
 
--- No commercial break before this level (first sessions stay ad-free).
-M.FIRST_BREAK_LEVEL = 3
+-- No commercial break before this level: the first minutes teach the game ad-free.
+-- Frequency after that is Poki's call (requirements: no internal ad timers).
+M.FIRST_BREAK_LEVEL = 5
 
 local function sdk()
 	return rawget(_G, "poki_sdk")
@@ -16,10 +15,6 @@ end
 
 function M.available()
 	return sdk() ~= nil
-end
-
-function M.update(dt)
-	clock = clock + dt
 end
 
 function M.is_ad_active()
@@ -46,10 +41,10 @@ function M.measure(category, what, action)
 end
 
 -- Natural break before the next gameplay (level start / retry). Skipped on the
--- first levels and right after a rewarded video; Poki throttles the rest itself.
+-- first levels; Poki throttles the rest itself.
 function M.commercial_break(level, on_done)
 	local s = sdk()
-	if not (s and s.commercial_break) or level < M.FIRST_BREAK_LEVEL or clock - last_rewarded < 45 then
+	if not (s and s.commercial_break) or level < M.FIRST_BREAK_LEVEL then
 		if on_done then on_done() end
 		return
 	end
@@ -72,7 +67,6 @@ end
 function M.rewarded(size, on_done)
 	local s = sdk()
 	if not (s and s.rewarded_break) then
-		last_rewarded = clock
 		if on_done then on_done(true) end
 		return
 	end
@@ -85,9 +79,7 @@ function M.rewarded(size, on_done)
 		elseif not done then
 			done = true
 			ad_active = false
-			local ok = status == s.REWARDED_BREAK_SUCCESS
-			if ok then last_rewarded = clock end
-			if on_done then on_done(ok) end
+			if on_done then on_done(status == s.REWARDED_BREAK_SUCCESS) end
 		end
 	end)
 end

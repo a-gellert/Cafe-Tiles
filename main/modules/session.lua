@@ -71,6 +71,7 @@ function M.new(level, opts)
 		dishes = 0,
 		chances = config.SECOND_CHANCES,
 		paid_chances = config.PAID_CHANCES,
+		free_chances = level <= config.FREE_CHANCE_LEVEL and 1 or 0,
 		vips = 0,          -- VIP guests spawned this level
 		vip_served = 0,
 		food_done = {},    -- served triples per food (missions)
@@ -496,10 +497,15 @@ function M.rush(s)
 	return true
 end
 
--- paid = continue for coins (its own counter), otherwise the rewarded chance
+-- paid: true = continue for coins, "free" = the early-level rescue, nil = the rewarded chance.
+-- Each kind has its own counter.
+local function chance_field(paid)
+	if paid == "free" then return "free_chances" end
+	return paid and "paid_chances" or "chances"
+end
+
 function M.can_second_chance(s, paid)
-	local left = paid and s.paid_chances or s.chances
-	return s.status == "jam" and left > 0 and #s.shelf < config.SHELF_COUNT
+	return s.status == "jam" and s[chance_field(paid)] > 0 and #s.shelf < config.SHELF_COUNT
 end
 
 -- Moves up to 3 tray tiles to the holding shelf, the loneliest foods first.
@@ -527,7 +533,8 @@ function M.second_chance(s, paid)
 		moved[#moved + 1] = id
 	end
 	purge_history(s, moved)
-	if paid then s.paid_chances = s.paid_chances - 1 else s.chances = s.chances - 1 end
+	local field = chance_field(paid)
+	s[field] = s[field] - 1
 	s.status = "play"
 	push(s, { e = "to_shelf", ids = moved })
 	push(s, { e = "shelf" })

@@ -59,6 +59,17 @@ M.GIFTS = {
 }
 M.GIFT_LATER = { coins = 70 }
 
+-- Phase 4: first-session playtime (Poki: easy start, no dying while learning, reveal features gradually)
+M.FREE_CHANCE_LEVEL = 15        -- up to this level the first jam is rescued for free, without a popup
+M.ASSIST_TRAY = 4               -- hint hand on the best tile when the tray holds this many tiles
+M.ASSIST_DELAY = 0.8            -- seconds without a tap before that hint shows...
+M.ASSIST_DELAY_LATE = 1.5       -- ...and after ASSIST_LEVEL (quick players never see it)
+M.ASSIST_LEVEL = 20
+M.HINT_IDLE_EARLY = 6           -- idle hint delay up to level 5
+M.HINT_IDLE = 10
+M.BOOSTERS_MIN_LEVEL = 2        -- booster bar hidden on the first level
+M.REVEAL_LEVEL = 3              -- tasks, star chest and the x2 video show from this level
+
 -- Rewarded / boosters
 M.SECOND_CHANCES = 2            -- per level
 M.START_BOOSTERS = { undo = 3, shuffle = 2, rush = 1 }
