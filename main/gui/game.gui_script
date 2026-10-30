@@ -358,6 +358,7 @@ function app.set_audio(sound_on, music_on)
 	progress.data.sound = sound_on
 	progress.data.music = music_on
 	progress.save()
+	audio.load_music()
 	audio.set(sound_on, music_on)
 	refresh_popup()
 end
@@ -423,6 +424,10 @@ function init(self)
 	-- straight into gameplay (Poki: no menus before playing); the cafe menu is one tap away
 	app.start_level(progress.data.level, true)
 	app.time_mark = 1
+	-- load background music after the main game has finished loading
+	timer.delay(0.2, false, function()
+		audio.load_music()
+	end)
 	-- visual QA: open a screen or popup right away
 	-- (cafe.debug_popup = menu | win | jam | pause | decor | settings | gift | levelup)
 	local dp = sys.get_config_string("cafe.debug_popup", "")
@@ -489,6 +494,7 @@ function on_input(self, action_id, action)
 				app.pressed = b
 				ui.press(b)
 			elseif app.screen == "game" and not app.popup and app.session then
+				audio.load_music()
 				if game_view.tap(x, y) then poki.gameplay_start() end
 			end
 		elseif action.released and app.pressed then

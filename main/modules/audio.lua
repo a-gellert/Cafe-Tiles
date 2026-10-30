@@ -5,6 +5,7 @@ local URL = "main:/sounds#"
 local sound_on = true
 local music_on = true
 local music_playing = false
+local music_loaded = false
 local last_played = {}
 local clock = 0
 
@@ -21,13 +22,20 @@ function M.play(name, gain, speed)
 end
 
 local function update_music()
+	if not music_loaded then return end
 	if music_on and not music_playing then
-		sound.play(URL .. "music", { gain = 0.6 })
+		sound.play(URL .. "music", { gain = 0.32 })
 		music_playing = true
 	elseif not music_on and music_playing then
 		sound.stop(URL .. "music")
 		music_playing = false
 	end
+end
+
+function M.load_music()
+	if music_loaded then return end
+	music_loaded = true
+	update_music()
 end
 
 function M.set(sound_enabled, music_enabled)

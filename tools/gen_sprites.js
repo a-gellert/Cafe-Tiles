@@ -175,206 +175,45 @@ function canvas(w, h) {
   };
 }
 
+function loadPNG(file) {
+  const buf = fs.readFileSync(file);
+  let pos = 8, w = 0, h = 0, idatParts = [];
+  while (pos < buf.length) {
+    const len = buf.readUInt32BE(pos);
+    const type = buf.toString('ascii', pos + 4, pos + 8);
+    if (type === 'IHDR') {
+      w = buf.readUInt32BE(pos + 8);
+      h = buf.readUInt32BE(pos + 12);
+    } else if (type === 'IDAT') {
+      idatParts.push(buf.slice(pos + 8, pos + 8 + len));
+    }
+    pos += 12 + len;
+  }
+  const raw = zlib.inflateSync(Buffer.concat(idatParts));
+  const px = new Float32Array(w * h * 4);
+  const stride = w * 4 + 1;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w * 4; x++) {
+      px[y * w * 4 + x] = raw[y * stride + 1 + x] / 255;
+    }
+  }
+  return { w, h, px };
+}
+
 // ======================================================================= FOOD (112x112)
 const S = 112;
-{ // burger
-  const c = canvas(S, S);
-  const topBun = union(inter(ellipse(56, 52, 43, 35), above(52)), rbox(56, 49, 43, 6, 6));
-  const lettuce = union(...[16, 24, 32, 40, 48, 56, 64, 72, 80, 88, 96].map(x => circle(x, 58, 6)));
-  const cheese = union(rbox(56, 61, 42, 3.5, 2), poly([[28, 62], [40, 62], [34, 72]], 1.5), poly([[66, 62], [78, 62], [72, 73]], 1.5));
-  const patty = rbox(56, 69, 42, 7.5, 7);
-  const bottom = rbox(56, 85, 40, 10, 9);
-  c.parts([[bottom, vgrad(H('#f2ad55'), H('#d98a32'), 76, 95)], [patty, H('#6e3b20')], [cheese, H('#ffc93c')],
-    [lettuce, H('#6cc644')], [topBun, vgrad(H('#f7b75e'), H('#e08d34'), 18, 56)]], 4);
-  for (const [x, y] of [[40, 32], [56, 26], [72, 32], [47, 42], [65, 42]]) c.fill(ellipseR(x, y, 3.4, 2, x < 56 ? -20 : 20), H('#fff4d8'));
-  c.fill(ellipse(40, 30, 9, 4.5), SHINE);
-  c.save('food_burger');
-}
-{ // coffee
-  const c = canvas(S, S);
-  const saucer = ellipse(56, 94, 46, 10);
-  const body = poly([[20, 42], [86, 42], [77, 90], [29, 90]], 7);
-  const handle = inter(ring(86, 62, 12, 8), rightOf(80));
-  c.parts([[saucer, H('#f4f4f8')], [handle, H('#ffffff')], [body, vgrad(H('#ffffff'), H('#e3e6ef'), 40, 92)]], 4);
-  c.fill(inter(body, rbox(53, 66, 60, 5.5, 0)), H('#ff8fa3'));
-  c.fill(ellipse(53, 44, 30, 7), H('#7a4422'));
-  c.fill(ellipse(48, 43, 14, 3), H('#c98b5a'));
-  c.fill(capsule(42, 30, 38, 12, 3.5), [1, 1, 1, 0.75]);
-  c.fill(capsule(62, 30, 66, 10, 3.5), [1, 1, 1, 0.75]);
-  c.fill(ellipse(32, 60, 4, 12), [1, 1, 1, 0.6]);
-  c.save('food_coffee');
-}
-{ // donut
-  const c = canvas(S, S);
-  const dough = sub(circle(56, 58, 45), circle(56, 58, 14));
-  const wav = (x, y) => len(x - 56, y - 55) - 38 - 3 * Math.sin(Math.atan2(y - 55, x - 56) * 7);
-  const icing = sub(wav, circle(56, 56, 17.5));
-  c.parts([[dough, vgrad(H('#eeb065'), H('#c98236'), 14, 104)]], 4);
-  c.fill(grow(icing, 0), H('#ff7eb6'));
-  c.fill(ring(56, 56, 18, 3), H('#d95c95'));
-  const cols = [H('#ffffff'), H('#ffe066'), H('#5ec3ff'), H('#7ed957'), H('#9b8cff')];
-  const sprinkles = [[34, 36, 30], [50, 26, -40], [70, 30, 60], [82, 46, 10], [80, 68, -50], [64, 82, 30], [42, 80, -20], [28, 62, 70], [30, 48, -60], [86, 58, 80], [52, 88, 0], [74, 80, 45]];
-  sprinkles.forEach(([x, y, a], i) => {
-    const r = a * Math.PI / 180;
-    c.fill(capsule(x - Math.cos(r) * 4, y - Math.sin(r) * 4, x + Math.cos(r) * 4, y + Math.sin(r) * 4, 2), cols[i % cols.length]);
-  });
-  c.fill(ellipseR(36, 34, 10, 4, -35), SHINE);
-  c.save('food_donut');
-}
-{ // pizza
-  const c = canvas(S, S);
-  const cheese = poly([[56, 106], [14, 28], [98, 28]], 5);
-  const crust = capsule(14, 24, 98, 24, 11);
-  c.parts([[cheese, vgrad(H('#ffe07a'), H('#ffc53d'), 20, 106)], [crust, vgrad(H('#f0b261'), H('#d48a3a'), 14, 34)]], 4);
-  for (const [x, y, r] of [[56, 50, 9], [40, 40, 7], [72, 40, 7], [56, 76, 7]]) {
-    c.fill(circle(x, y, r), H('#d8432f'));
-    c.fill(circle(x - r * 0.3, y - r * 0.3, r * 0.35), [1, 1, 1, 0.3]);
-  }
-  c.fill(ellipseR(68, 60, 5, 2.5, -40), H('#3fa34d'));
-  c.fill(ellipseR(46, 62, 5, 2.5, 30), H('#3fa34d'));
-  c.fill(capsule(26, 20, 86, 20, 3), [1, 1, 1, 0.35]);
-  c.save('food_pizza');
-}
-{ // cupcake
-  const c = canvas(S, S);
-  const wrap = poly([[24, 64], [88, 64], [79, 106], [33, 106]], 4);
-  const frost = union(circle(32, 62, 14), circle(80, 62, 14), circle(56, 58, 24), circle(44, 44, 16), circle(68, 44, 16), circle(56, 30, 14));
-  const cherry = circle(58, 16, 8);
-  c.parts([[wrap, H('#4fb6f2')], [frost, vgrad(H('#fff0f6'), H('#ffc2dc'), 16, 76)], [cherry, H('#e63946')]], 4);
-  c.fill(inter(wrap, (x, y) => Math.abs(((x - 56 + 1000) % 12) - 6) - 2), H('#2f93d6'));
-  c.fill(capsule(60, 9, 68, 2, 1.6), H('#4a2a1a'));
-  c.fill(circle(55, 13, 2.5), SHINE);
-  c.fill(ellipseR(42, 40, 8, 4, -30), [1, 1, 1, 0.6]);
-  c.save('food_cupcake');
-}
-{ // fries
-  const c = canvas(S, S);
-  const sticks = union(capsule(34, 60, 30, 18, 5.5), capsule(46, 60, 44, 10, 5.5), capsule(58, 60, 58, 14, 5.5), capsule(70, 60, 72, 8, 5.5), capsule(80, 60, 86, 20, 5.5));
-  const box = poly([[24, 50], [88, 50], [78, 106], [34, 106]], 5);
-  c.parts([[sticks, vgrad(H('#ffe27a'), H('#ffc53d'), 8, 60)], [box, vgrad(H('#f25c4f'), H('#d23a30'), 50, 106)]], 4);
-  c.fill(circle(56, 78, 11), H('#ffd34e'));
-  c.fill(star(56, 78, 8, 3.5), H('#f25c4f'));
-  c.fill(capsule(30, 56, 82, 56, 2.2), [1, 1, 1, 0.35]);
-  c.save('food_fries');
-}
-{ // ice cream
-  const c = canvas(S, S);
-  const cone = poly([[32, 60], [80, 60], [56, 108]], 4);
-  const scoop1 = union(circle(56, 52, 26), circle(36, 62, 9), circle(52, 66, 9), circle(70, 64, 9));
-  const scoop2 = circle(56, 30, 19);
-  const cherry = circle(62, 11, 6.5);
-  c.parts([[cone, H('#e9ab5e')], [scoop1, vgrad(H('#ffc0d9'), H('#ff8fb8'), 26, 74)], [scoop2, vgrad(H('#c8f2dc'), H('#8fdcb6'), 11, 48)], [cherry, H('#e63946')]], 4);
-  c.fill(inter(cone, (x, y) => Math.min(Math.abs(((x + y) % 12) - 6), Math.abs(((x - y + 1200) % 12) - 6)) - 1.2, below(70)), H('#c98636'));
-  c.fill(ellipseR(44, 44, 7, 4, -30), SHINE);
-  c.fill(ellipseR(48, 24, 5, 3, -30), SHINE);
-  c.save('food_icecream');
-}
-{ // hot dog
-  const c = canvas(S, S);
-  const back = capsule(18, 60, 94, 60, 21);
-  const sausage = capsule(10, 52, 102, 52, 11);
-  const front = inter(capsule(18, 66, 94, 66, 19), below(60));
-  c.parts([[back, H('#e7a24d')], [sausage, vgrad(H('#e0705a'), H('#b9472f'), 40, 64)], [front, vgrad(H('#f7c070'), H('#e39b45'), 60, 86)]], 4);
-  const zig = [];
-  for (let i = 0; i <= 10; i++) zig.push([20 + i * 7.2, i % 2 ? 44 : 52]);
-  c.fill(polyline(zig, 2.4), H('#ffd23f'));
-  c.fill(capsule(26, 76, 86, 76, 2.5), [1, 1, 1, 0.3]);
-  c.save('food_hotdog');
-}
-{ // croissant
-  const c = canvas(S, S);
-  const segs = [[-166, 8, 12], [-128, 12, 18], [-90, 14, 22], [-52, 12, 18], [-14, 8, 12]];
-  const shapes = segs.map(([a, rx, ry]) => {
-    const r = a * Math.PI / 180;
-    return ellipseR(56 + Math.cos(r) * 40, 90 + Math.sin(r) * 40, rx, ry, a + 90);
-  });
-  c.fill(grow(union(...shapes), 4), OUTC);
-  for (const i of [0, 4, 1, 3, 2]) {
-    c.fill(grow(shapes[i], 1.5), darker(H('#c97a2c'), 0.9));
-    c.fill(shapes[i], vgrad(H('#f7c26b'), H('#d98c36'), 40, 96));
-  }
-  c.fill(ellipseR(50, 52, 8, 3.5, -10), SHINE);
-  c.save('food_croissant');
-}
-{ // cookie
-  const c = canvas(S, S);
-  const body = sub(circle(56, 58, 44), union(circle(98, 22, 14), circle(86, 12, 10)));
-  c.parts([[body, vgrad(H('#e8b06a'), H('#c98a45'), 14, 102)]], 4);
-  for (const [x, y, rx, ry] of [[40, 40, 6, 5], [62, 34, 5, 4], [36, 66, 6, 5], [58, 58, 7, 5], [78, 62, 5, 5], [52, 82, 6, 5], [74, 84, 5, 4], [28, 50, 4, 3]]) {
-    c.fill(ellipse(x, y, rx, ry), H('#5a3420'));
-  }
-  c.fill(ellipseR(36, 30, 10, 4, -35), [1, 1, 1, 0.3]);
-  c.save('food_cookie');
-}
-{ // juice
-  const c = canvas(S, S);
-  const glass = poly([[30, 32], [82, 32], [76, 104], [36, 104]], 6);
-  const straw = capsule(66, 46, 84, 6, 4.5);
-  const slice = inter(circle(32, 34, 17), above(36));
-  c.parts([[straw, H('#ff5a6e')], [glass, H('#e6f6ff')], [slice, H('#ff9f1c')]], 4);
-  c.fill(inter(grow(glass, -5), below(46)), vgrad(H('#ffc04d'), H('#ff8c1a'), 46, 104));
-  c.fill(inter(circle(32, 34, 12), above(34)), H('#ffd27a'));
-  for (const a of [-150, -120, -90, -60, -30]) {
-    const r = a * Math.PI / 180;
-    c.fill(capsule(32, 34, 32 + Math.cos(r) * 11, 34 + Math.sin(r) * 11, 1), H('#ff9f1c'));
-  }
-  c.fill(capsule(42, 52, 40, 94, 3), [1, 1, 1, 0.55]);
-  c.save('food_juice');
-}
-{ // cake slice
-  const c = canvas(S, S);
-  const body = rbox(56, 76, 42, 26, 5);
-  const icing = union(rbox(56, 50, 43, 8, 7), circle(26, 58, 5), circle(48, 60, 5), circle(74, 59, 5), circle(90, 57, 4));
-  const berry = union(circle(51, 30, 8), circle(61, 30, 8), poly([[44, 32], [68, 32], [56, 46]], 2));
-  c.parts([[body, H('#f7d59c')], [icing, H('#ff9fbd')], [berry, H('#ff4d5e')]], 4);
-  c.fill(rbox(56, 76, 42, 3.5, 0), H('#ffffff'));
-  c.fill(rbox(56, 90, 42, 3.5, 0), H('#ff7a8a'));
-  c.fill(poly([[50, 22], [56, 16], [62, 22], [56, 26]], 1), H('#3fa34d'));
-  c.fill(ellipse(36, 48, 8, 3), SHINE);
-  c.save('food_cake');
-}
-{ // taco
-  const c = canvas(S, S);
-  const fill = union(...[-170, -150, -130, -110, -90, -70, -50, -30, -10].map((a, i) => {
-    const r = a * Math.PI / 180;
-    return circle(56 + Math.cos(r) * 44, 92 + Math.sin(r) * 44, i % 2 ? 9 : 8);
-  }));
-  const shell = inter(circle(56, 92, 44), above(92));
-  c.parts([[fill, H('#6cc644')], [shell, vgrad(H('#ffd469'), H('#e9a93a'), 48, 92)]], 4);
-  for (const a of [-160, -120, -80, -40]) {
-    const r = a * Math.PI / 180;
-    c.fill(circle(56 + Math.cos(r) * 46, 92 + Math.sin(r) * 46, 5), H('#e63946'));
-  }
-  for (const [x, y] of [[40, 70], [64, 64], [76, 80], [50, 84], [30, 84]]) c.fill(circle(x, y, 2.5), H('#d99a2b'));
-  c.save('food_taco');
-}
-{ // sushi
-  const c = canvas(S, S);
-  const nori = circle(56, 58, 42);
-  c.parts([[nori, H('#24332a')]], 4);
-  c.fill(circle(56, 56, 34), H('#fbfbf7'));
-  c.fill(circle(56, 56, 15), H('#ff8a65'));
-  c.fill(capsule(50, 50, 60, 60, 2), H('#ffb59c'));
-  for (const [x, y] of [[38, 42], [74, 44], [76, 70], [40, 72], [56, 82]]) c.fill(ellipse(x, y, 4, 3), H('#7ed957'));
-  c.fill(ellipseR(34, 32, 9, 4, -40), [1, 1, 1, 0.25]);
-  c.save('food_sushi');
-}
-{ // egg
-  const c = canvas(S, S);
-  const white = union(circle(56, 58, 30), circle(36, 48, 20), circle(76, 44, 22), circle(74, 74, 20), circle(38, 74, 18));
-  c.parts([[white, H('#ffffff')]], 4);
-  c.fill(circle(58, 58, 17), H('#e8a91c'));
-  c.fill(circle(58, 56, 16), H('#ffc12e'));
-  c.fill(ellipse(52, 50, 6, 4), [1, 1, 1, 0.7]);
-  c.save('food_egg');
-}
-{ // cheese
-  const c = canvas(S, S);
-  const front = poly([[14, 62], [98, 62], [98, 98], [14, 98]], 3);
-  const top = poly([[14, 62], [74, 26], [98, 62]], 3);
-  c.parts([[front, H('#ffcf3f')], [top, H('#ffe07a')]], 4);
-  for (const [x, y, r] of [[34, 80, 7], [60, 74, 5], [80, 86, 8], [52, 92, 4], [70, 48, 5], [86, 56, 3]]) c.fill(circle(x, y, r), H('#e8b324'));
-  c.save('food_cheese');
+const FOOD_NAMES = [
+  'food_burger', 'food_coffee', 'food_donut', 'food_pizza',
+  'food_cupcake', 'food_fries', 'food_icecream', 'food_hotdog',
+  'food_croissant', 'food_cookie', 'food_juice', 'food_cake',
+  'food_taco', 'food_sushi', 'food_egg', 'food_cheese'
+];
+
+for (const name of FOOD_NAMES) {
+  const srcPath = path.join('tools/food_icons', name + '.png');
+  const loaded = loadPNG(srcPath);
+  fs.copyFileSync(srcPath, path.join(OUT, name + '.png'));
+  ALL.push({ name, w: loaded.w, h: loaded.h, px: loaded.px });
 }
 
 // ======================================================================= TILES (124x144)
@@ -419,105 +258,17 @@ tile(H('#fffdf8'), H('#f7eee1'), H('#f2c592'), H('#d8955c'), H('#bf7a43')).save(
 }
 
 // ======================================================================= CUSTOMERS (160x160)
-function customer(name, fur, shirt, extra) {
-  const c = canvas(160, 160);
-  const body = rbox(80, 152, 58, 34, 28);
-  const head = circle(80, 84, 46);
-  const parts = extra.back ? extra.back() : [];
-  c.parts([...parts, [body, shirt], [head, fur]], 4);
-  c.fill(inter(body, below(140)), darker(shirt, 0.88));
-  c.fill(capsule(66, 130, 80, 140, 3), [1, 1, 1, 0.5]);
-  c.fill(capsule(94, 130, 80, 140, 3), [1, 1, 1, 0.5]);
-  if (extra.face) extra.face(c);
-  // eyes
-  const ey = extra.eyeY || 80;
-  for (const x of [62, 98]) {
-    c.fill(circle(x, ey, 6.5), H('#2b1d16'));
-    c.fill(circle(x + 2, ey - 2.5, 2.2), WHITE);
-  }
-  c.fill(ellipse(54, ey + 15, 8, 5), H('#ff7a8a', 0.45));
-  c.fill(ellipse(106, ey + 15, 8, 5), H('#ff7a8a', 0.45));
-  if (!extra.noMouth) c.fill(inter(ring(80, ey + 14, 8, 3.4), below(ey + 14)), H('#2b1d16'));
-  if (extra.top) extra.top(c);
-  c.fill(ellipseR(60, 52, 12, 6, -30), [1, 1, 1, 0.25]);
-  c.save('cust_' + name);
+const CUST_NAMES = [
+  'cust_cat', 'cust_bear', 'cust_bunny', 'cust_panda',
+  'cust_fox', 'cust_frog', 'cust_pig', 'cust_penguin'
+];
+
+for (const name of CUST_NAMES) {
+  const srcPath = path.join('tools/customer_icons', name + '.png');
+  const loaded = loadPNG(srcPath);
+  fs.copyFileSync(srcPath, path.join(OUT, name + '.png'));
+  ALL.push({ name, w: loaded.w, h: loaded.h, px: loaded.px });
 }
-customer('cat', H('#f6a55a'), H('#5ec3ff'), {
-  back: () => [[poly([[38, 62], [44, 16], [74, 44]], 4), H('#f6a55a')], [poly([[122, 62], [116, 16], [86, 44]], 4), H('#f6a55a')]],
-  face: c => {
-    c.fill(poly([[46, 50], [48, 28], [64, 44]], 2), H('#ffb3c1'));
-    c.fill(poly([[114, 50], [112, 28], [96, 44]], 2), H('#ffb3c1'));
-    for (const x of [70, 80, 90]) c.fill(capsule(x, 42, x, 54, 3), H('#e0853a'));
-    c.fill(poly([[74, 88], [86, 88], [80, 95]], 1.5), H('#ff7a8a'));
-    for (const s of [-1, 1]) {
-      c.fill(capsule(80 + s * 24, 96, 80 + s * 44, 92, 1.2), H('#4a2a1a'));
-      c.fill(capsule(80 + s * 24, 100, 80 + s * 44, 102, 1.2), H('#4a2a1a'));
-    }
-  },
-});
-customer('bear', H('#a8724a'), H('#7ed957'), {
-  back: () => [[circle(42, 46, 17), H('#a8724a')], [circle(118, 46, 17), H('#a8724a')]],
-  face: c => {
-    c.fill(circle(42, 46, 9), H('#e3b48a'));
-    c.fill(circle(118, 46, 9), H('#e3b48a'));
-    c.fill(ellipse(80, 102, 22, 16), H('#e8c8a0'));
-    c.fill(ellipse(80, 92, 8, 5.5), H('#3a2418'));
-  },
-});
-customer('bunny', H('#f4f0f0'), H('#e2574c'), {
-  back: () => [[capsule(62, 48, 54, 8, 13), H('#f4f0f0')], [capsule(98, 48, 106, 8, 13), H('#f4f0f0')]],
-  face: c => {
-    c.fill(capsule(62, 44, 55, 14, 6), H('#ffb3c1'));
-    c.fill(capsule(98, 44, 105, 14, 6), H('#ffb3c1'));
-    c.fill(ellipse(80, 92, 6, 4.5), H('#ff7a8a'));
-    c.fill(rbox(80, 108, 6, 5, 2), WHITE);
-  },
-});
-customer('panda', H('#fafafa'), H('#ffcf4a'), {
-  back: () => [[circle(42, 46, 16), H('#2b2b33')], [circle(118, 46, 16), H('#2b2b33')]],
-  face: c => {
-    c.fill(ellipseR(60, 82, 15, 11, -25), H('#2b2b33'));
-    c.fill(ellipseR(100, 82, 15, 11, 25), H('#2b2b33'));
-    c.fill(ellipse(80, 93, 7, 5), H('#2b2b33'));
-  },
-});
-customer('fox', H('#ff8a3d'), H('#9b8cff'), {
-  back: () => [[poly([[36, 66], [40, 12], [76, 42]], 4), H('#ff8a3d')], [poly([[124, 66], [120, 12], [84, 42]], 4), H('#ff8a3d')]],
-  face: c => {
-    c.fill(poly([[42, 30], [41, 14], [54, 26]], 2), H('#3a2418'));
-    c.fill(poly([[118, 30], [119, 14], [106, 26]], 2), H('#3a2418'));
-    c.fill(union(ellipse(58, 104, 24, 18), ellipse(102, 104, 24, 18), ellipse(80, 110, 18, 16)), H('#fff3e6'));
-    c.fill(ellipse(80, 96, 7, 5), H('#2b1d16'));
-  },
-});
-customer('frog', H('#7ccf5a'), H('#ff8a65'), {
-  back: () => [[circle(54, 46, 20), H('#7ccf5a')], [circle(106, 46, 20), H('#7ccf5a')]],
-  eyeY: 46,
-  noMouth: true,
-  face: c => {
-    c.fill(circle(54, 46, 13), WHITE);
-    c.fill(circle(106, 46, 13), WHITE);
-    c.fill(inter(ring(80, 88, 26, 4), below(90)), H('#2b1d16'));
-    c.fill(ellipse(54, 106, 8, 5), H('#ff7a8a', 0.45));
-    c.fill(ellipse(106, 106, 8, 5), H('#ff7a8a', 0.45));
-  },
-});
-customer('pig', H('#ffb3c1'), H('#4fd1c5'), {
-  back: () => [[poly([[40, 56], [46, 28], [70, 44]], 5), H('#ffb3c1')], [poly([[120, 56], [114, 28], [90, 44]], 5), H('#ffb3c1')]],
-  face: c => {
-    c.fill(ellipse(80, 98, 17, 12), H('#ff8fa6'));
-    c.fill(ellipse(74, 98, 3.5, 5), H('#c75b74'));
-    c.fill(ellipse(86, 98, 3.5, 5), H('#c75b74'));
-  },
-  noMouth: true,
-});
-customer('penguin', H('#34495e'), H('#ffd166'), {
-  face: c => {
-    c.fill(union(circle(64, 88, 25), circle(96, 88, 25), ellipse(80, 108, 26, 18)), H('#fafafa'));
-    c.fill(poly([[70, 94], [90, 94], [80, 106]], 3), H('#ff9f1c'));
-  },
-  noMouth: true,
-});
 
 // ======================================================================= UI SHAPES (white, tinted at runtime)
 { // panel: white rounded rect (slice9 32)

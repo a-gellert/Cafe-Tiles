@@ -206,160 +206,163 @@ sfx('coin', 0.28, t => {
 }
 
 // ------------------------------------------------------------------ music
-// "Sweet cafe": 16 bars of bossa-lounge in F major, 92 BPM (A section + B section).
-// Electric piano comping, finger bass, music-box melody, brushes, a pad in B and a reverb send.
-const MR = 24000;
-const BPM = 92, BEAT = 60 / BPM, BARS = 16;
-const LOOP = BARS * 4 * BEAT;
-const N = Math.round(LOOP * MR);
-const dry = new Float32Array(N), send = new Float32Array(N);
-// tails wrap around the loop end: the loop is seamless
-function play(start, dur, fn, gain, rev = 0) {
-  const s0 = Math.round(start * MR), len = Math.round(dur * MR);
-  for (let i = 0; i < len; i++) {
-    const v = fn(i / MR) * gain, k = ((s0 + i) % N + N) % N;
-    dry[k] += v;
-    if (rev) send[k] += v * rev;
-  }
-}
-function playBuf(start, buf, gain, rev = 0) {
-  const s0 = Math.round(start * MR);
-  for (let i = 0; i < buf.length; i++) {
-    const v = buf[i] * gain, k = ((s0 + i) % N + N) % N;
-    dry[k] += v;
-    if (rev) send[k] += v * rev;
-  }
-}
-const human = (k = 0.006) => (rnd() * 2 - 1) * k;
-
-// [bass root, voicing, beats]
-const F9 = [41, [57, 60, 64, 67]], Dm9 = [38, [57, 60, 64, 65]], Gm9 = [43, [58, 62, 65, 69]], C9 = [36, [58, 62, 64, 67]];
-const Am7 = [45, [55, 60, 64, 67]], Bbmaj7 = [34, [57, 62, 65, 69]], Bbmaj9 = [34, [57, 60, 62, 65]];
-const C7sus = [36, [58, 60, 65, 67]], D7 = [38, [54, 57, 60, 64]];
-const seg = (c, beats) => [c[0], c[1], beats];
-const bars = [
-  [seg(F9, 4)], [seg(Dm9, 4)], [seg(Gm9, 4)], [seg(C9, 4)],
-  [seg(F9, 4)], [seg(Am7, 4)], [seg(Bbmaj7, 4)], [seg(C7sus, 2), seg(C9, 2)],
-  [seg(Bbmaj9, 4)], [seg(Am7, 4)], [seg(Gm9, 4)], [seg(F9, 4)],
-  [seg(Bbmaj9, 4)], [seg(Am7, 2), seg(D7, 2)], [seg(Gm9, 4)], [seg(C9, 4)],
-];
-const melody = [
-  [[null, 0.5], [81, 0.5], [79, 0.5], [81, 0.5], [84, 1.5], [81, 0.5]],
-  [[79, 1], [77, 0.5], [76, 0.5], [77, 2]],
-  [[null, 0.5], [82, 0.5], [81, 0.5], [79, 0.5], [77, 1], [74, 1]],
-  [[76, 1.5], [77, 0.5], [79, 2]],
-  [[null, 0.5], [81, 0.5], [79, 0.5], [81, 0.5], [84, 1], [86, 0.5], [84, 0.5]],
-  [[81, 1.5], [79, 0.5], [76, 2]],
-  [[77, 1], [79, 0.5], [81, 0.5], [74, 1], [77, 1]],
-  [[79, 1.5], [77, 0.5], [76, 1], [null, 1]],
-  [[74, 1], [77, 1], [81, 1.5], [79, 0.5]],
-  [[76, 1], [79, 1], [84, 1.5], [81, 0.5]],
-  [[82, 1], [81, 0.5], [79, 0.5], [77, 1], [74, 1]],
-  [[76, 1.5], [77, 0.5], [81, 2]],
-  [[86, 1], [84, 0.5], [82, 0.5], [81, 1], [77, 1]],
-  [[84, 1], [81, 1], [78, 1], [81, 1]],
-  [[79, 1], [82, 1], [81, 0.5], [79, 0.5], [77, 1]],
-  [[76, 1], [79, 0.5], [77, 0.5], [76, 1], [72, 1]],
-];
-
-// drums, pre-rendered
-const kick = render(0.35, MR, t => Math.sin(TAU * (48 * t + 70 * (1 - Math.exp(-t * 25)) / 25)) * env(t, 0.002, 10));
-const rimNoise = render(0.12, MR, t => noise() * Math.exp(-t * 55));
-highpass(lowpass(rimNoise, 4000, MR), 1200, MR);
-const rim = rimNoise.map((v, i) => v + 0.3 * Math.sin(TAU * 1800 * i / MR) * Math.exp(-i / MR * 90));
-const shaker = render(0.09, MR, t => noise() * env(t, 0.01, 45));
-highpass(shaker, 5000, MR);
-
-bars.forEach((segs, b) => {
-  const t0 = b * 4 * BEAT;
-  let beat = 0;
-  for (const [root, voicing, beats] of segs) {
-    const ts = t0 + beat * BEAT;
-    // bossa bass: root (dotted quarter), fifth on the "and", per two beats
-    const fifth = root + 7 > 45 ? root - 5 : root + 7;
-    for (let h = 0; h < beats; h += 2) {
-      play(ts + h * BEAT + human(), 1.6 * BEAT, bass(note(root), 0.95, 1.4 * BEAT), 0.5);
-      play(ts + (h + 1.5) * BEAT + human(), 0.9 * BEAT, bass(note(fifth), 0.75, 0.45 * BEAT), 0.5);
+// Procedural fallback or loaded background music track
+function genProceduralMusic() {
+  const MR = 24000;
+  const BPM = 92, BEAT = 60 / BPM, BARS = 16;
+  const LOOP = BARS * 4 * BEAT;
+  const N = Math.round(LOOP * MR);
+  const dry = new Float32Array(N), send = new Float32Array(N);
+  function play(start, dur, fn, gain, rev = 0) {
+    const s0 = Math.round(start * MR), len = Math.round(dur * MR);
+    for (let i = 0; i < len; i++) {
+      const v = fn(i / MR) * gain, k = ((s0 + i) % N + N) % N;
+      dry[k] += v;
+      if (rev) send[k] += v * rev;
     }
-    // e-piano comping
-    const hits = beats === 4 ? (b % 2 ? [[0, 1, 0.85], [1.5, 0.75, 0.62], [2.5, 1, 0.7], [3.5, 0.4, 0.5]] : [[0, 1, 0.85], [1.5, 0.75, 0.62], [3, 0.8, 0.7]])
-      : [[0, 1, 0.8], [1.5, 0.4, 0.55]];
-    for (const [off, len, vel] of hits) {
-      voicing.forEach((m, k) => play(ts + off * BEAT + k * 0.004 + human(0.004), len * BEAT + 0.8,
-        epiano(note(m), vel * (0.92 + rnd() * 0.16), len * BEAT), 0.13, 0.35));
+  }
+  function playBuf(start, buf, gain, rev = 0) {
+    const s0 = Math.round(start * MR);
+    for (let i = 0; i < buf.length; i++) {
+      const v = buf[i] * gain, k = ((s0 + i) % N + N) % N;
+      dry[k] += v;
+      if (rev) send[k] += v * rev;
     }
-    // pad in the B section
-    if (b >= 8) for (const m of voicing) play(ts, beats * BEAT + 0.6, pad(note(m + 12), beats * BEAT), 0.035, 0.6);
-    beat += beats;
   }
-  // brushes
-  playBuf(t0 + human(0.003), kick, 0.36);
-  playBuf(t0 + 2 * BEAT + human(0.003), kick, 0.28);
-  if (b % 2) playBuf(t0 + 3.5 * BEAT, kick, 0.16);
-  playBuf(t0 + 1 * BEAT + human(0.004), rim, 0.13, 0.4);
-  playBuf(t0 + 3 * BEAT + human(0.004), rim, 0.13, 0.4);
-  if (b % 2 === 0) playBuf(t0 + 2.5 * BEAT + human(0.004), rim, 0.07, 0.4);
-  if (b === BARS - 1) for (const k of [3.33, 3.66]) playBuf(t0 + k * BEAT, rim, 0.06, 0.4);
-  for (let k = 0; k < 8; k++) playBuf(t0 + k * BEAT / 2 + human(0.004), shaker, (k % 2 ? 0.055 : 0.03) * (0.8 + rnd() * 0.4));
-  // melody
-  let mt = t0;
-  for (const [m, beats] of melody[b]) {
-    if (m) play(mt + human(0.004), beats * BEAT + 1.2, lead(note(m), 0.8 + rnd() * 0.15, beats * BEAT * 0.9), 0.3, 0.45);
-    mt += beats * BEAT;
+  const chordF = [53, 57, 60, 64], chordGm = [55, 58, 62, 65];
+  const chordAm = [57, 60, 64, 67], chordBb = [58, 62, 65, 69];
+  const chordC7 = [48, 55, 58, 60, 65], chordD7 = [50, 54, 57, 60];
+  const BARS_CHORDS = [
+    chordF, chordGm, chordAm, chordBb,
+    chordF, chordGm, chordC7, chordF,
+    chordBb, chordAm, chordGm, chordF,
+    chordGm, chordD7, chordGm, chordC7,
+  ];
+  const COMP_PATTERN = [0, 0.75, 1.5, 2.5, 3.25];
+  for (let b = 0; b < BARS; b++) {
+    const ch = BARS_CHORDS[b];
+    for (const beat of COMP_PATTERN) {
+      const st = (b * 4 + beat) * BEAT;
+      const v = 0.55 + rnd() * 0.15;
+      ch.forEach((n, k) => play(st + k * 0.003, 1.8 * BEAT, epiano(note(n), v, 1.4 * BEAT), 0.35, 0.45));
+    }
   }
-  // a glittering harp run into each section
-  if (b === 0 || b === 8) {
-    const tones = segs[0][1].map(m => m + 24).concat(segs[0][1].map(m => m + 36)).slice(0, 7);
-    tones.forEach((m, k) => play(t0 + k * 0.055, 0.8, lead(note(m), 0.35, 0.08), 0.12, 0.8));
+  const BASS_NOTES = [
+    [41, 48, 41, 48], [43, 50, 43, 50], [45, 52, 45, 52], [46, 53, 46, 53],
+    [41, 48, 41, 48], [43, 50, 43, 50], [36, 43, 36, 43], [41, 48, 41, 48],
+    [46, 53, 46, 53], [45, 52, 45, 52], [43, 50, 43, 50], [41, 48, 41, 48],
+    [43, 50, 43, 50], [38, 45, 38, 45], [43, 50, 43, 50], [36, 43, 36, 43],
+  ];
+  for (let b = 0; b < BARS; b++) {
+    const pat = BASS_NOTES[b];
+    for (let k = 0; k < 4; k++) {
+      const st = (b * 4 + k + (k % 2 === 1 ? 0.5 : 0)) * BEAT;
+      play(st, 0.85 * BEAT, bass(note(pat[k]), 0.85, 0.6 * BEAT), 0.52);
+    }
   }
-});
-
-// Freeverb-style mono reverb over the send; run twice so the tail wraps into the loop start
-function reverb(input) {
-  const scale = MR / 44100;
-  const combs = [1116, 1188, 1277, 1356, 1422, 1491].map(d => ({ buf: new Float32Array(Math.round(d * scale)), i: 0, store: 0 }));
-  const aps = [556, 441, 341].map(d => ({ buf: new Float32Array(Math.round(d * scale)), i: 0 }));
-  const out = new Float32Array(N), fb = 0.82, damp = 0.35;
-  for (let pass = 0; pass < 2; pass++) {
-    for (let n = 0; n < N; n++) {
-      const x = input[n] * 0.05;
-      let acc = 0;
-      for (const c of combs) {
-        const y = c.buf[c.i];
-        c.store = y * (1 - damp) + c.store * damp;
-        c.buf[c.i] = x + c.store * fb;
-        c.i = (c.i + 1) % c.buf.length;
-        acc += y;
+  const MELODY = [
+    [0.0, 69, 0.6, 0.8], [0.75, 67, 0.5, 0.5], [1.5, 65, 0.7, 1.0], [3.0, 67, 0.6, 0.7],
+    [4.5, 69, 0.8, 0.9], [5.5, 72, 0.7, 0.7], [6.5, 69, 0.6, 1.4],
+    [8.0, 72, 0.7, 0.7], [9.0, 74, 0.8, 0.7], [10.0, 76, 0.9, 1.3], [11.5, 74, 0.6, 0.8],
+    [12.5, 72, 0.7, 1.0], [14.0, 69, 0.6, 1.6],
+    [16.0, 69, 0.6, 0.8], [16.75, 67, 0.5, 0.5], [17.5, 65, 0.7, 1.0], [19.0, 67, 0.6, 0.7],
+    [20.5, 69, 0.8, 0.9], [21.5, 72, 0.7, 0.7], [22.5, 76, 0.8, 1.6],
+    [24.5, 74, 0.7, 0.8], [25.5, 72, 0.6, 0.6], [26.0, 69, 0.7, 1.0], [27.5, 67, 0.6, 0.9],
+    [28.5, 65, 0.8, 2.4],
+    [32.0, 77, 0.8, 0.9], [33.0, 76, 0.7, 0.7], [34.0, 74, 0.8, 1.2], [35.5, 72, 0.6, 0.6],
+    [36.5, 74, 0.7, 0.8], [37.5, 76, 0.8, 0.8], [38.5, 72, 0.7, 1.6],
+    [40.0, 70, 0.7, 0.7], [41.0, 69, 0.6, 0.6], [42.0, 67, 0.7, 1.2], [43.5, 65, 0.6, 0.6],
+    [44.5, 67, 0.8, 1.8],
+    [48.0, 69, 0.7, 0.7], [49.0, 70, 0.7, 0.7], [50.0, 72, 0.8, 1.0], [51.5, 74, 0.7, 0.8],
+    [52.5, 72, 0.8, 0.8], [53.5, 69, 0.7, 0.8], [54.5, 67, 0.7, 1.4],
+    [56.5, 65, 0.7, 0.8], [57.5, 67, 0.7, 0.7], [58.5, 69, 0.8, 1.0], [60.0, 67, 0.8, 2.6],
+  ];
+  for (const [beat, n, vel, len] of MELODY) {
+    play(beat * BEAT, len * BEAT + 0.5, lead(note(n), vel, len * BEAT), 0.42, 0.6);
+  }
+  const PAD_CHORDS = [
+    [58, 62, 65], [57, 60, 64], [55, 58, 62], [53, 57, 60],
+    [55, 58, 62], [54, 57, 60], [55, 58, 62], [55, 58, 60],
+  ];
+  for (let b = 0; b < 8; b++) {
+    const ch = PAD_CHORDS[b];
+    for (const n of ch) play((8 + b) * 4 * BEAT, 4.2 * BEAT, pad(note(n), 4 * BEAT), 0.16, 0.8);
+  }
+  const shk = shaker(0.06, 4500, 9000);
+  for (let b = 0; b < BARS; b++) {
+    for (let k = 0; k < 8; k++) {
+      const t = (b * 4 + k * 0.5) * BEAT;
+      const v = k % 2 === 0 ? 0.35 : 0.2;
+      playBuf(t, shk, v * 0.6, 0.2);
+    }
+  }
+  function reverb(inp) {
+    const out = new Float32Array(inp.length);
+    const delays = [1117, 1361, 1543, 1723, 1949, 2137].map(d => Math.round(d * MR / 24000));
+    const feedbacks = [0.76, 0.74, 0.72, 0.70, 0.68, 0.66];
+    for (let pass = 0; pass < 2; pass++) {
+      for (let c = 0; c < delays.length; c++) {
+        const d = delays[c], fb = feedbacks[c];
+        const ring = new Float32Array(d);
+        let ptr = 0;
+        for (let i = 0; i < inp.length; i++) {
+          const delayed = ring[ptr];
+          const acc = inp[i] + delayed * fb;
+          ring[ptr] = acc;
+          ptr = (ptr + 1) % d;
+          if (pass === 1) out[i] += delayed / delays.length;
+        }
       }
-      for (const a of aps) {
-        const b = a.buf[a.i];
-        a.buf[a.i] = acc + b * 0.5;
-        a.i = (a.i + 1) % a.buf.length;
-        acc = b - acc;
-      }
-      if (pass === 1) out[n] = acc;
     }
+    return out;
   }
-  return out;
+  const wet = reverb(send);
+  const wetGain = 0.55 * rms(send) / (rms(wet) || 1);
+  const music = new Float32Array(N);
+  for (let i = 0; i < N; i++) music[i] = dry[i] + wet[i] * wetGain;
+  function loopFilter(buf, fn) {
+    const pre = Math.min(buf.length, MR);
+    const tmp = new Float32Array(pre + buf.length);
+    tmp.set(buf.subarray(buf.length - pre), 0);
+    tmp.set(buf, pre);
+    fn(tmp);
+    buf.set(tmp.subarray(pre));
+  }
+  loopFilter(music, b => lowpass(highpass(b, 30, MR), 8500, MR));
+  const pk = music.reduce((m, v) => Math.max(m, Math.abs(v)), 0);
+  for (let i = 0; i < N; i++) music[i] = Math.tanh(music[i] / pk * 1.3) / Math.tanh(1.3);
+  return { name: 'music', buf: normalize(music, 0.82), rate: MR, q: 2, loop: true, dur: LOOP };
 }
-const wet = reverb(send);
-const wetGain = 0.55 * rms(send) / (rms(wet) || 1);
-const music = new Float32Array(N);
-for (let i = 0; i < N; i++) music[i] = dry[i] + wet[i] * wetGain;
-// warm master: rumble cut, gentle low-pass and soft saturation. The filters are warmed up on
-// the loop end, so the first sample continues the last one.
-function loopFilter(buf, fn) {
-  const pre = Math.min(buf.length, MR);
-  const tmp = new Float32Array(pre + buf.length);
-  tmp.set(buf.subarray(buf.length - pre), 0);
-  tmp.set(buf, pre);
-  fn(tmp);
-  buf.set(tmp.subarray(pre));
+
+async function loadMusicFile(file) {
+  const { MPEGDecoder } = require(path.join(__dirname, 'node_modules', 'mpg123-decoder'));
+  const dec = new MPEGDecoder();
+  await dec.ready;
+  const raw = fs.readFileSync(file);
+  const { channelData, sampleRate: srcRate } = dec.decode(raw);
+  const targetRate = 32000;
+  // Anti-aliasing filter before downsampling
+  const chL = lowpass(channelData[0], targetRate * 0.46, srcRate);
+  const chR = channelData[1] ? lowpass(channelData[1], targetRate * 0.46, srcRate) : chL;
+  const ratio = srcRate / targetRate;
+  const outLen = Math.floor(chL.length / ratio);
+  const outL = new Float32Array(outLen);
+  const outR = new Float32Array(outLen);
+  for (let i = 0; i < outLen; i++) {
+    const srcIdx = i * ratio;
+    const i0 = Math.floor(srcIdx);
+    const i1 = Math.min(i0 + 1, chL.length - 1);
+    const frac = srcIdx - i0;
+    outL[i] = chL[i0] * (1 - frac) + chL[i1] * frac;
+    outR[i] = chR[i0] * (1 - frac) + chR[i1] * frac;
+  }
+  fade(outL, targetRate, 40);
+  fade(outR, targetRate, 40);
+  normalize(outL, 0.85);
+  normalize(outR, 0.85);
+  const dur = outL.length / targetRate;
+  return { name: 'music', buf: [outL, outR], rate: targetRate, q: 0, loop: true, dur };
 }
-loopFilter(music, b => lowpass(highpass(b, 30, MR), 8500, MR));
-const pk = music.reduce((m, v) => Math.max(m, Math.abs(v)), 0);
-for (let i = 0; i < N; i++) music[i] = Math.tanh(music[i] / pk * 1.3) / Math.tanh(1.3);
-sounds.push({ name: 'music', buf: normalize(music, 0.82), rate: MR, q: 2, loop: true });
 
 // ------------------------------------------------------------------ encode + sounds.go
 function wav(buf, rate) {
@@ -372,20 +375,44 @@ function wav(buf, rate) {
   h.write('data', 36); h.writeUInt32LE(data.length, 40);
   return Buffer.concat([h, data]);
 }
-async function ogg(buf, rate, q) {
+async function ogg(bufOrChannels, rate, q) {
   const enc = await createOggEncoder();
-  enc.configure({ channels: 1, sampleRate: rate, vbrQuality: q });
-  // encode() returns a view into the encoder memory: copy before the next call
-  const head = Buffer.from(enc.encode([buf]));
-  return Buffer.concat([head, Buffer.from(enc.finalize())]);
+  const channels = Array.isArray(bufOrChannels) ? bufOrChannels : [bufOrChannels];
+  enc.configure({ channels: channels.length, sampleRate: rate, vbrQuality: q });
+  const chunk = 65536;
+  const bufs = [];
+  for (let i = 0; i < channels[0].length; i += chunk) {
+    const slices = channels.map(c => c.subarray(i, Math.min(i + chunk, channels[0].length)));
+    const res = enc.encode(slices);
+    if (res && res.length) bufs.push(Buffer.from(res));
+  }
+  const fin = enc.finalize();
+  if (fin && fin.length) bufs.push(Buffer.from(fin));
+  return Buffer.concat(bufs);
 }
 
 (async () => {
+  const musicFile = [
+    path.join(__dirname, 'music.mp3'),
+    path.join(__dirname, 'assets', 'music.mp3'),
+  ].find(p => fs.existsSync(p));
+
+  let musicItem;
+  if (musicFile) {
+    console.log('Loading background music from ' + musicFile + '...');
+    musicItem = await loadMusicFile(musicFile);
+  } else {
+    musicItem = genProceduralMusic();
+  }
+  sounds.push(musicItem);
+
   let total = 0;
   const comps = [];
   for (const s of sounds) {
-    const w = wav(s.buf, s.rate), o = await ogg(s.buf, s.rate, s.q);
-    const useOgg = o.length < w.length * 0.85;
+    const isStereo = Array.isArray(s.buf);
+    const w = isStereo ? null : wav(s.buf, s.rate);
+    const o = await ogg(s.buf, s.rate, s.q);
+    const useOgg = isStereo || o.length < w.length * 0.85;
     const ext = useOgg ? 'ogg' : 'wav', data = useOgg ? o : w;
     for (const e of ['ogg', 'wav']) {
       const p = path.join(OUT, `${s.name}.${e}`);
@@ -393,18 +420,19 @@ async function ogg(buf, rate, q) {
     }
     fs.writeFileSync(path.join(OUT, `${s.name}.${ext}`), data);
     total += data.length;
-    console.log(`${s.name.padEnd(8)} ${ext} ${(data.length / 1024).toFixed(1).padStart(6)} KB  (${(s.buf.length / s.rate).toFixed(2)} s, wav ${(w.length / 1024).toFixed(0)} KB)`);
+    const dur = s.dur || (isStereo ? (s.buf[0].length / s.rate) : (s.buf.length / s.rate));
+    console.log(`${s.name.padEnd(8)} ${ext} ${(data.length / 1024).toFixed(1).padStart(6)} KB  (${dur.toFixed(2)} s${w ? `, wav ${(w.length / 1024).toFixed(0)} KB` : ''})`);
     comps.push([
       'embedded_components {',
-      `  id: "${s.name}"`,
+      '  id: "' + s.name + '"',
       '  type: "sound"',
-      `  data: "sound: \\"/${OUT}/${s.name}.${ext}\\"\\n"`,
-      `  "looping: ${s.loop ? 1 : 0}\\n"`,
-      `  "group: \\"${s.loop ? 'music' : 'sfx'}\\"\\n"`,
+      '  data: "sound: \\"/' + OUT + '/' + s.name + '.' + ext + '\\"\\n"',
+      '  "looping: ' + (s.loop ? 1 : 0) + '\\n"',
+      '  "group: \\"' + (s.loop ? 'music' : 'sfx') + '\\"\\n"',
       '  "gain: 1.0\\n"',
       '}',
     ].join('\n'));
   }
   fs.writeFileSync(GO, comps.join('\n') + '\n');
-  console.log(`sounds: ${sounds.length}, ${(total / 1024).toFixed(0)} KB (music loop ${LOOP.toFixed(2)} s)`);
+  console.log(`sounds: ${sounds.length}, ${(total / 1024).toFixed(0)} KB (music loop ${musicItem.dur.toFixed(2)} s)`);
 })();
